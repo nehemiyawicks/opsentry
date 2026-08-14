@@ -18,5 +18,14 @@ type Store interface {
 	LoadRecentBlocks(ctx context.Context, chain string, minBlockNumber uint64) ([]pipeline.BlockRef, error)
 	IsDuplicate(ctx context.Context, fingerprint string) (bool, error)
 	RecordAlert(ctx context.Context, alert pipeline.Alert) error
+	LoadAlertsAtBlock(ctx context.Context, chain string, blockNumber uint64, blockHash [32]byte) ([]StoredAlert, error)
 	Close() error
+}
+
+type StoredAlert struct {
+	Fingerprint string
+	MonitorID   string
+	Severity    string
+	Receivers   []string
+	Env         map[string]any
 }

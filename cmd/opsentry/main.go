@@ -163,8 +163,27 @@ func main() {
 				chainLog.Info("canonical", "block", b.Number, "hash", fmt.Sprintf("%x", b.Hash[:6]))
 				logFetcher.OnCanonical(ctx, b)
 			},
-			OnReverted: func(_ context.Context, b pipeline.BlockRef) {
+			OnReverted: func(ctx context.Context, b pipeline.BlockRef) {
 				chainLog.Warn("reverted", "block", b.Number, "hash", fmt.Sprintf("%x", b.Hash[:6]))
+				stored, err := store.LoadAlertsAtBlock(ctx, ch.ID, b.Number, b.Hash)
+				if err != nil {
+					chainLog.Warn("load alerts for revert", "err", err)
+					return
+				}
+				for _, sa := range stored {
+					env := sa.Env
+					if env == nil {
+						env = map[string]any{}
+					}
+					env["kind"] = string(pipeline.AlertReverted)
+					for _, rid := range sa.Receivers {
+						if err := router.SendEnv(ctx, rid, env); err != nil {
+							chainLog.Warn("notify revert", "receiver", rid, "err", err)
+							continue
+						}
+						obs.AlertsSent.WithLabelValues(rid, string(pipeline.AlertReverted)).Inc()
+					}
+				}
 			},
 		}
 		wg.Add(1)

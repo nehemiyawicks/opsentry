@@ -2,9 +2,8 @@ package notify
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
-
-	"github.com/nehemiyawicks/opsentry/internal/pipeline"
 )
 
 type LogNotifier struct {
@@ -13,19 +12,34 @@ type LogNotifier struct {
 	Logger     *slog.Logger
 }
 
-func (n *LogNotifier) Send(_ context.Context, alert pipeline.Alert) error {
-	title, body := n.Template.Render(alert)
+func (n *LogNotifier) SendEnv(_ context.Context, env map[string]any) error {
+	title, body := n.Template.Render(env)
 	l := n.Logger
 	if l == nil {
 		l = slog.Default()
 	}
 	l.Info("notify",
 		"receiver", n.ReceiverID,
-		"kind", string(alert.Kind),
-		"severity", alert.Match.Severity,
-		"monitor", alert.Match.Event.MonitorID,
+		"kind", asString(env["kind"]),
+		"severity", asString(env["severity"]),
+		"monitor", monitorID(env),
 		"title", title,
 		"body", body,
 	)
 	return nil
+}
+
+func asString(v any) string {
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+func monitorID(env map[string]any) string {
+	m, ok := env["monitor"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	return asString(m["id"])
 }

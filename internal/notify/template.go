@@ -12,9 +12,12 @@ type Template struct {
 	Body  string
 }
 
-func (t Template) Render(a pipeline.Alert) (string, string) {
-	env := pipeline.AlertEnv(a)
+func (t Template) Render(env map[string]any) (string, string) {
 	return interpolate(t.Title, env), interpolate(t.Body, env)
+}
+
+func (t Template) RenderAlert(a pipeline.Alert) (string, string) {
+	return t.Render(pipeline.AlertEnv(a))
 }
 
 func interpolate(s string, env map[string]any) string {

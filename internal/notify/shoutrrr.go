@@ -17,14 +17,13 @@ type ShoutrrrNotifier struct {
 	Template   Template
 }
 
-func (n *ShoutrrrNotifier) Send(_ context.Context, alert pipeline.Alert) error {
-	title, body := n.Template.Render(alert)
+func (n *ShoutrrrNotifier) SendEnv(_ context.Context, env map[string]any) error {
+	title, body := n.Template.Render(env)
 	msg := body
 	if title != "" {
 		msg = title + "\n" + body
 	}
-	errs := shoutrrr.Send(n.URL, msg)
-	if errs != nil {
+	if errs := shoutrrr.Send(n.URL, msg); errs != nil {
 		return fmt.Errorf("shoutrrr %s: %w", n.ReceiverID, errs)
 	}
 	return nil
@@ -41,11 +40,15 @@ func NewRouter(notifiers map[string]Notifier) *Router {
 }
 
 func (r *Router) Send(ctx context.Context, receiverID string, alert pipeline.Alert) error {
+	return r.SendEnv(ctx, receiverID, pipeline.AlertEnv(alert))
+}
+
+func (r *Router) SendEnv(ctx context.Context, receiverID string, env map[string]any) error {
 	n, ok := r.notifiers[receiverID]
 	if !ok {
 		return fmt.Errorf("%w: %s", errUnknownReceiver, receiverID)
 	}
-	return n.Send(ctx, alert)
+	return n.SendEnv(ctx, env)
 }
 
 func (r *Router) IDs() []string {
@@ -58,6 +61,4 @@ func (r *Router) IDs() []string {
 
 func IsUnknownReceiver(err error) bool { return errors.Is(err, errUnknownReceiver) }
 
-func normalizeShoutrrrURL(u string) string {
-	return strings.TrimSpace(u)
-}
+func normalizeShoutrrrURL(u string) string { return strings.TrimSpace(u) }

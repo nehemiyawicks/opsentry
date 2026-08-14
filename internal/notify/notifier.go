@@ -1,11 +1,7 @@
 package notify
 
-import (
-	"context"
-
-	"github.com/nehemiyawicks/opsentry/internal/pipeline"
-)
+import "context"
 
 type Notifier interface {
-	Send(ctx context.Context, alert pipeline.Alert) error
+	SendEnv(ctx context.Context, env map[string]any) error
 }

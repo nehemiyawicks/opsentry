@@ -57,6 +57,7 @@ func migrate(db *sql.DB) error {
 			block_hash  BLOB NOT NULL,
 			kind        TEXT NOT NULL,
 			severity    TEXT,
+			receivers   TEXT NOT NULL DEFAULT '[]',
 			at          INTEGER NOT NULL,
 			payload     TEXT
 		)`,
@@ -168,9 +169,13 @@ func (s *SQLiteStore) RecordAlert(ctx context.Context, a pipeline.Alert) error {
 	if err != nil {
 		return fmt.Errorf("marshal alert env: %w", err)
 	}
+	receivers, err := json.Marshal(a.Match.Receivers)
+	if err != nil {
+		return fmt.Errorf("marshal receivers: %w", err)
+	}
 	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO alerts (fingerprint, monitor_id, chain, block_num, block_hash, kind, severity, at, payload)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO alerts (fingerprint, monitor_id, chain, block_num, block_hash, kind, severity, receivers, at, payload)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(fingerprint) DO NOTHING`,
 		a.Fingerprint,
 		a.Match.Event.MonitorID,
@@ -179,10 +184,39 @@ func (s *SQLiteStore) RecordAlert(ctx context.Context, a pipeline.Alert) error {
 		a.Match.Event.Log.Block.Hash[:],
 		string(a.Kind),
 		a.Match.Severity,
+		string(receivers),
 		a.At.Unix(),
 		string(payload),
 	)
 	return err
+}
+
+func (s *SQLiteStore) LoadAlertsAtBlock(ctx context.Context, chain string, blockNumber uint64, blockHash [32]byte) ([]StoredAlert, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT fingerprint, monitor_id, severity, receivers, payload
+		 FROM alerts
+		 WHERE chain = ? AND block_num = ? AND block_hash = ? AND kind = 'firing'`,
+		chain, int64(blockNumber), blockHash[:])
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []StoredAlert
+	for rows.Next() {
+		var sa StoredAlert
+		var receivers, payload string
+		if err := rows.Scan(&sa.Fingerprint, &sa.MonitorID, &sa.Severity, &receivers, &payload); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(receivers), &sa.Receivers); err != nil {
+			return nil, fmt.Errorf("decode receivers: %w", err)
+		}
+		if err := json.Unmarshal([]byte(payload), &sa.Env); err != nil {
+			return nil, fmt.Errorf("decode payload: %w", err)
+		}
+		out = append(out, sa)
+	}
+	return out, rows.Err()
 }
 
 func arr32(b []byte) [32]byte {
