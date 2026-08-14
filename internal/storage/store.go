@@ -12,9 +12,9 @@ type Cursor struct {
 }
 
 type Store interface {
-	LoadCursor(ctx context.Context, chain string) (Cursor, error)
+	LoadCursor(ctx context.Context, chain string) (Cursor, bool, error)
 	SaveCursor(ctx context.Context, c Cursor) error
 	RememberBlock(ctx context.Context, b pipeline.BlockRef) error
-	IsDuplicate(ctx context.Context, fingerprint string) (bool, error)
-	RecordAlert(ctx context.Context, alert pipeline.Alert) error
+	LoadRecentBlocks(ctx context.Context, chain string, minBlockNumber uint64) ([]pipeline.BlockRef, error)
+	Close() error
 }

@@ -21,7 +21,7 @@ func (f *fakeReader) set(b pipeline.BlockRef) {
 	f.blocks[b.Number] = b
 }
 
-func (f *fakeReader) BlockByNumber(_ context.Context, _ string, n uint64) (pipeline.BlockRef, error) {
+func (f *fakeReader) BlockByNumber(_ context.Context, n uint64) (pipeline.BlockRef, error) {
 	f.fetches++
 	b, ok := f.blocks[n]
 	if !ok {

@@ -8,7 +8,7 @@ import (
 )
 
 type ChainReader interface {
-	BlockByNumber(ctx context.Context, chain string, n uint64) (pipeline.BlockRef, error)
+	BlockByNumber(ctx context.Context, n uint64) (pipeline.BlockRef, error)
 }
 
 type ReconcileResult struct {
@@ -45,6 +45,17 @@ func (r *Reconciler) Tip() (pipeline.BlockRef, bool) {
 	return r.known[r.tip], true
 }
 
+func (r *Reconciler) LoadKnown(blocks []pipeline.BlockRef) {
+	for _, b := range blocks {
+		r.known[b.Number] = b
+		if b.Number > r.tip {
+			r.tip = b.Number
+		}
+		r.seeded = true
+	}
+	r.prune()
+}
+
 func (r *Reconciler) OnHead(ctx context.Context, head pipeline.BlockRef) (ReconcileResult, error) {
 	if !r.seeded {
 		r.record(head)
@@ -67,7 +78,7 @@ func (r *Reconciler) applyForward(ctx context.Context, head pipeline.BlockRef) (
 		if n == head.Number {
 			b = head
 		} else {
-			got, err := r.reader.BlockByNumber(ctx, r.chain, n)
+			got, err := r.reader.BlockByNumber(ctx,n)
 			if err != nil {
 				return ReconcileResult{}, fmt.Errorf("fetch %d during catchup: %w", n, err)
 			}
@@ -109,7 +120,7 @@ func (r *Reconciler) handleReorg(ctx context.Context, head pipeline.BlockRef) (R
 			ancestorFound = true
 			break
 		}
-		got, err := r.reader.BlockByNumber(ctx, r.chain, parentNum)
+		got, err := r.reader.BlockByNumber(ctx,parentNum)
 		if err != nil {
 			return ReconcileResult{}, fmt.Errorf("walk back to %d: %w", parentNum, err)
 		}
