@@ -1,0 +1,21 @@
+# opsentry rulesets
+
+Reference monitor configurations you can copy into your `config.yaml`, or run standalone.
+
+Each subfolder covers one protocol or system layer. Every `.yaml` file here is a complete, runnable opsentry config: the `chains`, `receivers`, and `monitors` blocks are all present. Point opsentry at one of them with `-config` and it will start monitoring the corresponding contracts.
+
+For your real deployment, take the `monitors:` blocks you want, drop them into your own config, and share your `chains:` and `receivers:` sections across all of them.
+
+## What's here
+
+- **`op-stack/`** — Superchain / OP-Stack system contracts. Portal pause events, SystemConfig changes, L2 withdrawal message passer. Sourced from the invariants in [`ethereum-optimism/monitorism`](https://github.com/ethereum-optimism/monitorism).
+- **`uniswap-v3/`** — Uniswap V3 factory and pools. (coming next)
+- **`aave-v3/`** — Aave V3 lending pool. (coming next)
+
+## Verifying addresses
+
+Contract addresses in these rulesets come from official sources (superchain-registry, protocol docs) but you should verify them against a trusted source before relying on them in production. A wrong address means you'll silently miss the events you care about.
+
+## Verifying rules
+
+Run `go test ./internal/config/...` before committing changes to a ruleset. The `TestRulesetsParse` integration test loads every `.yaml` under this directory through the same config loader opsentry uses at boot, so syntax errors and unknown receiver references fail in CI, not production.

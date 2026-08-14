@@ -1,0 +1,43 @@
+chains:
+  - id: ethereum-mainnet
+    chain_id: 1
+    rpcs:
+      - url: https://eth.llamarpc.com
+        weight: 100
+    block_time_ms: 12000
+    confirmations:
+      fast: 3
+      safe: safe
+      finalized: finalized
+    reorg_check: hash_chain
+    recovery:
+      enabled: true
+      interval: 5m
+      max_blocks_per_run: 50
+      max_retries: 3
+
+receivers:
+  - id: critical
+    type: log
+    url: ""
+    template:
+      title: "[CRITICAL] Base SystemConfig changed"
+      body: |
+        updateType=${event.params.updateType}
+        version=${event.params.version}
+        tx=${event.log.tx_hash}
+        block=${event.log.block.number}
+
+monitors:
+  - id: base-system-config-l1
+    chain: ethereum-mainnet
+    address: "0x73a79Fab69143498Ed3712e519A88a918e1f4072"
+    abi: |
+      [
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"version","type":"uint256"},{"indexed":true,"name":"updateType","type":"uint8"},{"indexed":false,"name":"data","type":"bytes"}],"name":"ConfigUpdate","type":"event"}
+      ]
+    confirmation: safe
+    rules:
+      - when: 'event.name == "ConfigUpdate"'
+        severity: critical
+        receivers: [critical]

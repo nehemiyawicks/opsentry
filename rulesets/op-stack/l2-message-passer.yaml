@@ -1,0 +1,44 @@
+chains:
+  - id: base
+    chain_id: 8453
+    rpcs:
+      - url: https://mainnet.base.org
+        weight: 100
+    block_time_ms: 2000
+    confirmations:
+      fast: 3
+      safe: safe
+      finalized: finalized
+    reorg_check: hash_chain
+    recovery:
+      enabled: true
+      interval: 5m
+      max_blocks_per_run: 50
+      max_retries: 3
+
+receivers:
+  - id: high
+    type: log
+    url: ""
+    template:
+      title: "[HIGH] Large L2->L1 withdrawal on ${event.log.chain}"
+      body: |
+        sender=${event.params.sender}
+        target=${event.params.target}
+        value=${event.params.value}
+        tx=${event.log.tx_hash}
+        block=${event.log.block.number}
+
+monitors:
+  - id: base-l2-message-passer
+    chain: base
+    address: "0x4200000000000000000000000000000000000016"
+    abi: |
+      [
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"nonce","type":"uint256"},{"indexed":true,"name":"sender","type":"address"},{"indexed":true,"name":"target","type":"address"},{"indexed":false,"name":"value","type":"uint256"},{"indexed":false,"name":"gasLimit","type":"uint256"},{"indexed":false,"name":"data","type":"bytes"},{"indexed":false,"name":"withdrawalHash","type":"bytes32"}],"name":"MessagePassed","type":"event"}
+      ]
+    confirmation: fast
+    rules:
+      - when: 'event.name == "MessagePassed" && event.params.value > 100e18'
+        severity: high
+        receivers: [high]

@@ -1,0 +1,57 @@
+chains:
+  - id: ethereum-mainnet
+    chain_id: 1
+    rpcs:
+      - url: https://eth.llamarpc.com
+        weight: 100
+    block_time_ms: 12000
+    confirmations:
+      fast: 3
+      safe: safe
+      finalized: finalized
+    reorg_check: hash_chain
+    recovery:
+      enabled: true
+      interval: 5m
+      max_blocks_per_run: 50
+      max_retries: 3
+
+receivers:
+  - id: critical
+    type: log
+    url: ""
+    template:
+      title: "[CRITICAL] ${monitor.id} — ${event.name}"
+      body: |
+        Contract: ${event.log.address}
+        Block:    ${event.log.block.number}
+        Tx:       ${event.log.tx_hash}
+  - id: high
+    type: log
+    url: ""
+    template:
+      title: "[HIGH] ${monitor.id} — ${event.name}"
+      body: |
+        Large deposit detected.
+        from=${event.params.from}
+        to=${event.params.to}
+        tx=${event.log.tx_hash}
+
+monitors:
+  - id: base-portal-pause-l1
+    chain: ethereum-mainnet
+    address: "0x49048044D57e1C92A77f79988d21Fa8fAF74E97e"
+    abi: |
+      [
+        {"anonymous":false,"inputs":[{"indexed":false,"name":"account","type":"address"}],"name":"Paused","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":false,"name":"account","type":"address"}],"name":"Unpaused","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"to","type":"address"},{"indexed":true,"name":"version","type":"uint256"},{"indexed":false,"name":"opaqueData","type":"bytes"}],"name":"TransactionDeposited","type":"event"}
+      ]
+    confirmation: safe
+    rules:
+      - when: 'event.name == "Paused"'
+        severity: critical
+        receivers: [critical]
+      - when: 'event.name == "Unpaused"'
+        severity: critical
+        receivers: [critical]
