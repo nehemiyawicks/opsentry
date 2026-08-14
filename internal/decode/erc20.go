@@ -17,24 +17,67 @@ const erc20ABIJSON = `[
   {"anonymous":false,"inputs":[{"indexed":true,"name":"owner","type":"address"},{"indexed":true,"name":"spender","type":"address"},{"indexed":false,"name":"value","type":"uint256"}],"name":"Approval","type":"event"}
 ]`
 
+type MonitorSpec struct {
+	ID      string
+	ChainID uint64
+	Address common.Address
+	ABI     string
+}
+
 type ABIDecoder struct {
 	abis     map[string]abi.ABI
 	monitors map[string]string
+	fetcher  *SourcifyFetcher
+}
+
+func NewDecoder() *ABIDecoder {
+	return &ABIDecoder{
+		abis:     make(map[string]abi.ABI),
+		monitors: make(map[string]string),
+		fetcher:  NewSourcifyFetcher(),
+	}
 }
 
 func NewERC20Decoder(addrToMonitor map[string]string) (*ABIDecoder, error) {
-	a, err := abi.JSON(strings.NewReader(erc20ABIJSON))
-	if err != nil {
-		return nil, fmt.Errorf("parse erc20 abi: %w", err)
-	}
-	abis := make(map[string]abi.ABI, len(addrToMonitor))
-	normalized := make(map[string]string, len(addrToMonitor))
+	d := NewDecoder()
 	for addr, monitorID := range addrToMonitor {
-		k := strings.ToLower(addr)
-		abis[k] = a
-		normalized[k] = monitorID
+		if err := d.Register(context.Background(), MonitorSpec{
+			ID:      monitorID,
+			Address: common.HexToAddress(addr),
+			ABI:     "erc20",
+		}); err != nil {
+			return nil, err
+		}
 	}
-	return &ABIDecoder{abis: abis, monitors: normalized}, nil
+	return d, nil
+}
+
+func (d *ABIDecoder) Register(ctx context.Context, spec MonitorSpec) error {
+	a, err := d.loadABI(ctx, spec)
+	if err != nil {
+		return fmt.Errorf("monitor %s: %w", spec.ID, err)
+	}
+	key := strings.ToLower(spec.Address.Hex())
+	d.abis[key] = a
+	d.monitors[key] = spec.ID
+	return nil
+}
+
+func (d *ABIDecoder) loadABI(ctx context.Context, spec MonitorSpec) (abi.ABI, error) {
+	trimmed := strings.TrimSpace(spec.ABI)
+	switch {
+	case trimmed == "erc20":
+		return abi.JSON(strings.NewReader(erc20ABIJSON))
+	case trimmed == "sourcify":
+		if spec.ChainID == 0 {
+			return abi.ABI{}, fmt.Errorf("sourcify requires chain_id")
+		}
+		return d.fetcher.Fetch(ctx, spec.ChainID, spec.Address)
+	case strings.HasPrefix(trimmed, "["):
+		return abi.JSON(strings.NewReader(trimmed))
+	default:
+		return abi.ABI{}, fmt.Errorf("unsupported abi %q (use 'erc20', 'sourcify', or inline JSON)", spec.ABI)
+	}
 }
 
 func (d *ABIDecoder) Decode(_ context.Context, log pipeline.Log) (pipeline.Event, error) {

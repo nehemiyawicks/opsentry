@@ -100,13 +100,14 @@ func main() {
 		}
 		chainLog := logger.With("chain", ch.ID)
 
-		addrs, addrToMonitor := monitorAddressesAndMap(cfg.Monitors, ch.ID)
+		addrs := monitorAddresses(cfg.Monitors, ch.ID)
 		chainLog.Info("aggregated monitor addresses", "count", len(addrs))
 
-		decoder, err := decode.NewERC20Decoder(addrToMonitor)
-		if err != nil {
-			logger.Error("decoder init failed, skipping chain", "chain", ch.ID, "err", err)
-			continue
+		decoder := decode.NewDecoder()
+		for _, spec := range monitorSpecs(cfg.Monitors, ch) {
+			if err := decoder.Register(ctx, spec); err != nil {
+				chainLog.Warn("skip monitor: abi load failed", "monitor", spec.ID, "err", err)
+			}
 		}
 		evaluator, err := rules.NewExprEvaluator(monitorRules(cfg.Monitors, ch.ID))
 		if err != nil {
@@ -184,9 +185,8 @@ func main() {
 	logger.Info("opsentry stopped")
 }
 
-func monitorAddressesAndMap(monitors []config.Monitor, chain string) ([]common.Address, map[string]string) {
+func monitorAddresses(monitors []config.Monitor, chain string) []common.Address {
 	seen := make(map[common.Address]struct{})
-	m2id := make(map[string]string)
 	var out []common.Address
 	for _, m := range monitors {
 		if m.Chain != chain || m.Address == "" {
@@ -198,9 +198,24 @@ func monitorAddressesAndMap(monitors []config.Monitor, chain string) ([]common.A
 		}
 		seen[addr] = struct{}{}
 		out = append(out, addr)
-		m2id[addr.Hex()] = m.ID
 	}
-	return out, m2id
+	return out
+}
+
+func monitorSpecs(monitors []config.Monitor, ch config.Chain) []decode.MonitorSpec {
+	var out []decode.MonitorSpec
+	for _, m := range monitors {
+		if m.Chain != ch.ID || m.Address == "" {
+			continue
+		}
+		out = append(out, decode.MonitorSpec{
+			ID:      m.ID,
+			ChainID: ch.ChainID,
+			Address: common.HexToAddress(m.Address),
+			ABI:     m.ABI,
+		})
+	}
+	return out
 }
 
 func monitorRules(monitors []config.Monitor, chain string) []rules.MonitorRules {
