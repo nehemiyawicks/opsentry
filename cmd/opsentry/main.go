@@ -17,10 +17,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/nehemiyawicks/opsentry/internal/config"
+	"github.com/nehemiyawicks/opsentry/internal/decode"
 	"github.com/nehemiyawicks/opsentry/internal/httpapi"
 	"github.com/nehemiyawicks/opsentry/internal/ingest"
 	"github.com/nehemiyawicks/opsentry/internal/pipeline"
 	"github.com/nehemiyawicks/opsentry/internal/rpc"
+	"github.com/nehemiyawicks/opsentry/internal/rules"
 	"github.com/nehemiyawicks/opsentry/internal/storage"
 )
 
@@ -88,20 +90,47 @@ func main() {
 		}
 		chainLog := logger.With("chain", ch.ID)
 
-		addrs := monitorAddresses(cfg.Monitors, ch.ID)
+		addrs, addrToMonitor := monitorAddressesAndMap(cfg.Monitors, ch.ID)
 		chainLog.Info("aggregated monitor addresses", "count", len(addrs))
+
+		decoder, err := decode.NewERC20Decoder(addrToMonitor)
+		if err != nil {
+			logger.Error("decoder init failed, skipping chain", "chain", ch.ID, "err", err)
+			continue
+		}
+		evaluator, err := rules.NewExprEvaluator(monitorRules(cfg.Monitors, ch.ID))
+		if err != nil {
+			logger.Error("rule compile failed, skipping chain", "chain", ch.ID, "err", err)
+			continue
+		}
+
 		logFetcher := &ingest.LogFetcher{
 			Chain:     ch.ID,
 			Client:    client,
 			Addresses: addrs,
 			Log:       chainLog,
-			OnLog: func(_ context.Context, l pipeline.Log) {
-				chainLog.Info("log",
-					"block", l.Block.Number,
-					"address", fmt.Sprintf("0x%x", l.Address[:]),
-					"topic0", fmt.Sprintf("0x%x", l.Topics[0][:]),
-					"tx", fmt.Sprintf("0x%x", l.TxHash[:6]),
-				)
+			OnLog: func(ctx context.Context, l pipeline.Log) {
+				ev, err := decoder.Decode(ctx, l)
+				if err != nil {
+					chainLog.Debug("decode", "err", err)
+					return
+				}
+				matches, err := evaluator.Eval(ctx, ev)
+				if err != nil {
+					chainLog.Warn("evaluate", "err", err)
+					return
+				}
+				for _, m := range matches {
+					chainLog.Info("match",
+						"monitor", m.Event.MonitorID,
+						"rule", m.RuleIdx,
+						"severity", m.Severity,
+						"event", ev.Name,
+						"block", ev.Log.Block.Number,
+						"tx", fmt.Sprintf("0x%x", ev.Log.TxHash[:6]),
+						"params", ev.Params,
+					)
+				}
 			},
 		}
 
@@ -139,8 +168,9 @@ func main() {
 	logger.Info("opsentry stopped")
 }
 
-func monitorAddresses(monitors []config.Monitor, chain string) []common.Address {
+func monitorAddressesAndMap(monitors []config.Monitor, chain string) ([]common.Address, map[string]string) {
 	seen := make(map[common.Address]struct{})
+	m2id := make(map[string]string)
 	var out []common.Address
 	for _, m := range monitors {
 		if m.Chain != chain || m.Address == "" {
@@ -152,6 +182,26 @@ func monitorAddresses(monitors []config.Monitor, chain string) []common.Address 
 		}
 		seen[addr] = struct{}{}
 		out = append(out, addr)
+		m2id[addr.Hex()] = m.ID
+	}
+	return out, m2id
+}
+
+func monitorRules(monitors []config.Monitor, chain string) []rules.MonitorRules {
+	var out []rules.MonitorRules
+	for _, m := range monitors {
+		if m.Chain != chain {
+			continue
+		}
+		mr := rules.MonitorRules{MonitorID: m.ID}
+		for _, r := range m.Rules {
+			mr.Rules = append(mr.Rules, rules.Rule{
+				When:      r.When,
+				Severity:  r.Severity,
+				Receivers: r.Receivers,
+			})
+		}
+		out = append(out, mr)
 	}
 	return out
 }

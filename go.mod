@@ -4,6 +4,7 @@ go 1.25.5
 
 require (
 	github.com/ethereum/go-ethereum v1.17.5
+	github.com/expr-lang/expr v1.17.8
 	github.com/prometheus/client_golang v1.24.1
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.56.0
