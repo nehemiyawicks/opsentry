@@ -1,0 +1,34 @@
+services:
+  opsentry:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["-config=/etc/opsentry/config.yaml", "-http.addr=:8080"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../config.example.yaml:/etc/opsentry/config.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      OPSENTRY_DB_URL: postgres://opsentry:opsentry@postgres:5432/opsentry?sslmode=disable
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: opsentry
+      POSTGRES_PASSWORD: opsentry
+      POSTGRES_DB: opsentry
+    ports:
+      - "5432:5432"
+    volumes:
+      - opsentry_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opsentry -d opsentry"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  opsentry_pg:

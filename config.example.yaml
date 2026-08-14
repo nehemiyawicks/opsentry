@@ -1,0 +1,56 @@
+chains:
+  - id: base
+    chain_id: 8453
+    rpcs:
+      - url: https://mainnet.base.org
+        weight: 100
+    block_time_ms: 2000
+    confirmations:
+      fast: 3
+      safe: safe
+      finalized: finalized
+    reorg_check: hash_chain
+    recovery:
+      enabled: true
+      interval: 5m
+      max_blocks_per_run: 50
+      max_retries: 3
+
+  - id: op-mainnet
+    chain_id: 10
+    rpcs:
+      - url: https://mainnet.optimism.io
+        weight: 100
+    block_time_ms: 2000
+    confirmations:
+      fast: 3
+      safe: safe
+      finalized: finalized
+    reorg_check: hash_chain
+    recovery:
+      enabled: true
+      interval: 5m
+      max_blocks_per_run: 50
+      max_retries: 3
+
+receivers:
+  - id: slack-critical
+    type: slack
+    url: slack://token-a/token-b/token-c
+    template:
+      title: "[${severity}] ${monitor.id}"
+      body: |
+        ${event.name} on chain ${event.log.chain} at block ${event.log.block.number}
+        tx: ${event.log.tx_hash}
+
+monitors:
+  - id: usdc-large-transfer-base
+    chain: base
+    address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    abi: sourcify
+    confirmation: fast
+    reads: []
+    rules:
+      - when: 'event.name == "Transfer" && event.params.value > 100000e6'
+        severity: high
+        receivers: [slack-critical]

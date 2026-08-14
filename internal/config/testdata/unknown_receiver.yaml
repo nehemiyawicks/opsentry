@@ -1,0 +1,25 @@
+chains:
+  - id: base
+    chain_id: 8453
+    rpcs: [{url: https://example.invalid, weight: 100}]
+    block_time_ms: 2000
+    confirmations: {fast: 3, safe: safe, finalized: finalized}
+    reorg_check: hash_chain
+    recovery: {enabled: false, interval: 5m, max_blocks_per_run: 10, max_retries: 3}
+
+receivers:
+  - id: r1
+    type: slack
+    url: slack://x/y/z
+    template: {title: t, body: b}
+
+monitors:
+  - id: m1
+    chain: base
+    address: "0x0000000000000000000000000000000000000000"
+    abi: sourcify
+    confirmation: fast
+    rules:
+      - when: 'true'
+        severity: low
+        receivers: [does-not-exist]
