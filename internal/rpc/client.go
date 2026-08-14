@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	gethrpc "github.com/ethereum/go-ethereum/rpc"
@@ -47,6 +48,10 @@ func (c *Client) HeadByTag(ctx context.Context, tag string) (pipeline.BlockRef, 
 		return pipeline.BlockRef{}, fmt.Errorf("%s: null header for tag %q (node may not expose it)", c.chain, tag)
 	}
 	return toRef(c.chain, h), nil
+}
+
+func (c *Client) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
+	return c.eth.FilterLogs(ctx, q)
 }
 
 func toRef(chain string, h *types.Header) pipeline.BlockRef {

@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/nehemiyawicks/opsentry/internal/config"
 	"github.com/nehemiyawicks/opsentry/internal/httpapi"
 	"github.com/nehemiyawicks/opsentry/internal/ingest"
@@ -85,6 +87,24 @@ func main() {
 			interval = 2 * time.Second
 		}
 		chainLog := logger.With("chain", ch.ID)
+
+		addrs := monitorAddresses(cfg.Monitors, ch.ID)
+		chainLog.Info("aggregated monitor addresses", "count", len(addrs))
+		logFetcher := &ingest.LogFetcher{
+			Chain:     ch.ID,
+			Client:    client,
+			Addresses: addrs,
+			Log:       chainLog,
+			OnLog: func(_ context.Context, l pipeline.Log) {
+				chainLog.Info("log",
+					"block", l.Block.Number,
+					"address", fmt.Sprintf("0x%x", l.Address[:]),
+					"topic0", fmt.Sprintf("0x%x", l.Topics[0][:]),
+					"tx", fmt.Sprintf("0x%x", l.TxHash[:6]),
+				)
+			},
+		}
+
 		tracker := &ingest.HeadTracker{
 			Chain:      ch.ID,
 			Interval:   interval,
@@ -93,8 +113,9 @@ func main() {
 			Reconciler: rec,
 			Store:      store,
 			Log:        chainLog,
-			OnCanonical: func(_ context.Context, b pipeline.BlockRef) {
+			OnCanonical: func(ctx context.Context, b pipeline.BlockRef) {
 				chainLog.Info("canonical", "block", b.Number, "hash", fmt.Sprintf("%x", b.Hash[:6]))
+				logFetcher.OnCanonical(ctx, b)
 			},
 			OnReverted: func(_ context.Context, b pipeline.BlockRef) {
 				chainLog.Warn("reverted", "block", b.Number, "hash", fmt.Sprintf("%x", b.Hash[:6]))
@@ -116,4 +137,21 @@ func main() {
 	_ = srv.Shutdown(shutdown)
 	wg.Wait()
 	logger.Info("opsentry stopped")
+}
+
+func monitorAddresses(monitors []config.Monitor, chain string) []common.Address {
+	seen := make(map[common.Address]struct{})
+	var out []common.Address
+	for _, m := range monitors {
+		if m.Chain != chain || m.Address == "" {
+			continue
+		}
+		addr := common.HexToAddress(m.Address)
+		if _, dup := seen[addr]; dup {
+			continue
+		}
+		seen[addr] = struct{}{}
+		out = append(out, addr)
+	}
+	return out
 }
