@@ -36,10 +36,17 @@ var (
 
 func main() {
 	var cfgPath, addr, dbPath string
+	var showVersion bool
 	flag.StringVar(&cfgPath, "config", "config.yaml", "path to config file")
 	flag.StringVar(&addr, "http.addr", ":8080", "http listen address")
 	flag.StringVar(&dbPath, "db", "opsentry.db", "path to sqlite database")
+	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("opsentry %s (%s)\n", version, commit)
+		return
+	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)

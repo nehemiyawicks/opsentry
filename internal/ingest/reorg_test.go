@@ -9,7 +9,7 @@ import (
 )
 
 type fakeReader struct {
-	blocks map[uint64]pipeline.BlockRef
+	blocks  map[uint64]pipeline.BlockRef
 	fetches int
 }
 

@@ -37,7 +37,9 @@ func TestFingerprintDeterministic(t *testing.T) {
 			MonitorID: "m1",
 		},
 	}
-	if Fingerprint(m) != Fingerprint(m) {
-		t.Fatal("fingerprint must be deterministic")
+	first := Fingerprint(m)
+	second := Fingerprint(m)
+	if first != second {
+		t.Fatalf("fingerprint must be deterministic: %q vs %q", first, second)
 	}
 }

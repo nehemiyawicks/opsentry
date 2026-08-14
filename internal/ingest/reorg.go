@@ -78,7 +78,7 @@ func (r *Reconciler) applyForward(ctx context.Context, head pipeline.BlockRef) (
 		if n == head.Number {
 			b = head
 		} else {
-			got, err := r.reader.BlockByNumber(ctx,n)
+			got, err := r.reader.BlockByNumber(ctx, n)
 			if err != nil {
 				return ReconcileResult{}, fmt.Errorf("fetch %d during catchup: %w", n, err)
 			}
@@ -120,7 +120,7 @@ func (r *Reconciler) handleReorg(ctx context.Context, head pipeline.BlockRef) (R
 			ancestorFound = true
 			break
 		}
-		got, err := r.reader.BlockByNumber(ctx,parentNum)
+		got, err := r.reader.BlockByNumber(ctx, parentNum)
 		if err != nil {
 			return ReconcileResult{}, fmt.Errorf("walk back to %d: %w", parentNum, err)
 		}

@@ -28,8 +28,8 @@ func Dial(ctx context.Context, chain, url string) (*Client, error) {
 	return &Client{chain: chain, eth: c, raw: c.Client()}, nil
 }
 
-func (c *Client) Close()         { c.eth.Close() }
-func (c *Client) Chain() string  { return c.chain }
+func (c *Client) Close()        { c.eth.Close() }
+func (c *Client) Chain() string { return c.chain }
 
 func (c *Client) BlockByNumber(ctx context.Context, n uint64) (pipeline.BlockRef, error) {
 	h, err := c.eth.HeaderByNumber(ctx, new(big.Int).SetUint64(n))
