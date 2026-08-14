@@ -1,0 +1,48 @@
+chains:
+  - id: base
+    chain_id: 8453
+    rpcs:
+      - url: https://mainnet.base.org
+        weight: 100
+    block_time_ms: 2000
+    confirmations:
+      fast: 3
+      safe: safe
+      finalized: finalized
+    reorg_check: hash_chain
+    recovery:
+      enabled: true
+      interval: 5m
+      max_blocks_per_run: 50
+      max_retries: 3
+
+receivers:
+  - id: high
+    type: log
+    url: ""
+    template:
+      title: "[HIGH] Aave V3 liquidation on ${event.log.chain}"
+      body: |
+        collateralAsset=${event.params.collateralAsset}
+        debtAsset=${event.params.debtAsset}
+        user=${event.params.user}
+        debtToCover=${event.params.debtToCover}
+        liquidatedCollateralAmount=${event.params.liquidatedCollateralAmount}
+        liquidator=${event.params.liquidator}
+        tx=${event.log.tx_hash}
+        block=${event.log.block.number}
+
+monitors:
+  - id: aave-v3-pool-base
+    chain: base
+    address: "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5"
+    abi: |
+      [
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"collateralAsset","type":"address"},{"indexed":true,"name":"debtAsset","type":"address"},{"indexed":true,"name":"user","type":"address"},{"indexed":false,"name":"debtToCover","type":"uint256"},{"indexed":false,"name":"liquidatedCollateralAmount","type":"uint256"},{"indexed":false,"name":"liquidator","type":"address"},{"indexed":false,"name":"receiveAToken","type":"bool"}],"name":"LiquidationCall","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"reserve","type":"address"},{"indexed":false,"name":"user","type":"address"},{"indexed":true,"name":"onBehalfOf","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"interestRateMode","type":"uint8"},{"indexed":false,"name":"borrowRate","type":"uint256"},{"indexed":true,"name":"referralCode","type":"uint16"}],"name":"Borrow","type":"event"}
+      ]
+    confirmation: fast
+    rules:
+      - when: 'event.name == "LiquidationCall"'
+        severity: high
+        receivers: [high]
