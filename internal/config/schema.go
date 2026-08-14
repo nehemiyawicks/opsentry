@@ -44,7 +44,12 @@ type Receiver struct {
 	ID       string           `yaml:"id"`
 	Type     string           `yaml:"type"`
 	URL      string           `yaml:"url"`
+	Throttle *Throttle        `yaml:"throttle,omitempty"`
 	Template ReceiverTemplate `yaml:"template"`
+}
+
+type Throttle struct {
+	MinInterval Duration `yaml:"min_interval"`
 }
 
 type ReceiverTemplate struct {

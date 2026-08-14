@@ -37,6 +37,8 @@ receivers:
   - id: slack-critical
     type: log
     url: ""
+    throttle:
+      min_interval: 5s
     template:
       title: "[${severity}] ${monitor.id}"
       body: |

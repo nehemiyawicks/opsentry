@@ -20,6 +20,10 @@ var (
 		prometheus.CounterOpts{Name: "opsentry_alerts_deduped_total", Help: "Alerts suppressed by dedup, per monitor"},
 		[]string{"monitor"},
 	)
+	AlertsThrottled = prometheus.NewCounterVec(
+		prometheus.CounterOpts{Name: "opsentry_alerts_throttled_total", Help: "Alerts suppressed by receiver throttle, per receiver"},
+		[]string{"receiver"},
+	)
 	ReorgsSeen = prometheus.NewCounterVec(
 		prometheus.CounterOpts{Name: "opsentry_reorgs_seen_total", Help: "Reorgs detected, per chain and depth bucket"},
 		[]string{"chain", "depth"},
@@ -31,7 +35,7 @@ var (
 )
 
 func init() {
-	prometheus.MustRegister(HeadLag, AlertsSent, AlertsDeduped, ReorgsSeen, RPCErrors)
+	prometheus.MustRegister(HeadLag, AlertsSent, AlertsDeduped, AlertsThrottled, ReorgsSeen, RPCErrors)
 }
 
 func Handler() http.Handler {
