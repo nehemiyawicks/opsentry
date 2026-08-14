@@ -16,10 +16,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/nehemiyawicks/opsentry/internal/alerts"
 	"github.com/nehemiyawicks/opsentry/internal/config"
 	"github.com/nehemiyawicks/opsentry/internal/decode"
 	"github.com/nehemiyawicks/opsentry/internal/httpapi"
 	"github.com/nehemiyawicks/opsentry/internal/ingest"
+	"github.com/nehemiyawicks/opsentry/internal/notify"
+	"github.com/nehemiyawicks/opsentry/internal/obs"
 	"github.com/nehemiyawicks/opsentry/internal/pipeline"
 	"github.com/nehemiyawicks/opsentry/internal/rpc"
 	"github.com/nehemiyawicks/opsentry/internal/rules"
@@ -54,6 +57,13 @@ func main() {
 		log.Fatalf("open db: %v", err)
 	}
 	defer store.Close()
+
+	router, err := notify.BuildRouter(cfg.Receivers, logger)
+	if err != nil {
+		log.Fatalf("build receivers: %v", err)
+	}
+	logger.Info("receivers ready", "count", len(cfg.Receivers))
+	alertMgr := &alerts.Manager{Store: store}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -121,15 +131,21 @@ func main() {
 					return
 				}
 				for _, m := range matches {
-					chainLog.Info("match",
-						"monitor", m.Event.MonitorID,
-						"rule", m.RuleIdx,
-						"severity", m.Severity,
-						"event", ev.Name,
-						"block", ev.Log.Block.Number,
-						"tx", fmt.Sprintf("0x%x", ev.Log.TxHash[:6]),
-						"params", ev.Params,
-					)
+					alert, fired, err := alertMgr.Handle(ctx, m)
+					if err != nil {
+						chainLog.Warn("alert handle", "err", err)
+						continue
+					}
+					if !fired {
+						continue
+					}
+					for _, rid := range m.Receivers {
+						if err := router.Send(ctx, rid, alert); err != nil {
+							chainLog.Warn("notify", "receiver", rid, "err", err)
+							continue
+						}
+						obs.AlertsSent.WithLabelValues(rid, string(alert.Kind)).Inc()
+					}
 				}
 			},
 		}

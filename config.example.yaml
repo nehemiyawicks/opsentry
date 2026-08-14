@@ -35,19 +35,20 @@ chains:
 
 receivers:
   - id: slack-critical
-    type: slack
-    url: slack://token-a/token-b/token-c
+    type: log
+    url: ""
     template:
       title: "[${severity}] ${monitor.id}"
       body: |
-        ${event.name} on chain ${event.log.chain} at block ${event.log.block.number}
-        tx: ${event.log.tx_hash}
+        ${event.name} on ${event.log.chain} block ${event.log.block.number}
+        value=${event.params.value} from=${event.params.from} to=${event.params.to}
+        tx=${event.log.tx_hash}
 
 monitors:
   - id: usdc-large-transfer-base
     chain: base
     address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-    abi: sourcify
+    abi: erc20
     confirmation: fast
     reads: []
     rules:

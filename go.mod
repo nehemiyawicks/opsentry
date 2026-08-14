@@ -3,6 +3,7 @@ module github.com/nehemiyawicks/opsentry
 go 1.25.5
 
 require (
+	github.com/containrrr/shoutrrr v0.8.0
 	github.com/ethereum/go-ethereum v1.17.5
 	github.com/expr-lang/expr v1.17.8
 	github.com/prometheus/client_golang v1.24.1
@@ -23,6 +24,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ethereum/c-kzg-4844/v2 v2.1.8 // indirect
+	github.com/fatih/color v1.16.0 // indirect
 	github.com/fjl/jsonw v0.1.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -30,6 +32,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect

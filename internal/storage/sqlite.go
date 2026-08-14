@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -48,6 +49,19 @@ func migrate(db *sql.DB) error {
 			PRIMARY KEY (chain, block_number)
 		)`,
 		`CREATE INDEX IF NOT EXISTS blocks_chain_num_desc ON blocks(chain, block_number DESC)`,
+		`CREATE TABLE IF NOT EXISTS alerts (
+			fingerprint TEXT PRIMARY KEY,
+			monitor_id  TEXT NOT NULL,
+			chain       TEXT NOT NULL,
+			block_num   INTEGER NOT NULL,
+			block_hash  BLOB NOT NULL,
+			kind        TEXT NOT NULL,
+			severity    TEXT,
+			at          INTEGER NOT NULL,
+			payload     TEXT
+		)`,
+		`CREATE INDEX IF NOT EXISTS alerts_chain_block ON alerts(chain, block_num)`,
+		`CREATE INDEX IF NOT EXISTS alerts_monitor ON alerts(monitor_id)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -135,6 +149,40 @@ func (s *SQLiteStore) LoadRecentBlocks(ctx context.Context, chain string, minBlo
 		})
 	}
 	return out, rows.Err()
+}
+
+func (s *SQLiteStore) IsDuplicate(ctx context.Context, fingerprint string) (bool, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT 1 FROM alerts WHERE fingerprint = ? LIMIT 1`, fingerprint)
+	var one int
+	if err := row.Scan(&one); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *SQLiteStore) RecordAlert(ctx context.Context, a pipeline.Alert) error {
+	payload, err := json.Marshal(pipeline.AlertEnv(a))
+	if err != nil {
+		return fmt.Errorf("marshal alert env: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO alerts (fingerprint, monitor_id, chain, block_num, block_hash, kind, severity, at, payload)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(fingerprint) DO NOTHING`,
+		a.Fingerprint,
+		a.Match.Event.MonitorID,
+		a.Match.Event.Log.Chain,
+		int64(a.Match.Event.Log.Block.Number),
+		a.Match.Event.Log.Block.Hash[:],
+		string(a.Kind),
+		a.Match.Severity,
+		a.At.Unix(),
+		string(payload),
+	)
+	return err
 }
 
 func arr32(b []byte) [32]byte {

@@ -7,5 +7,5 @@ import (
 )
 
 type Notifier interface {
-	Send(ctx context.Context, receiver string, alert pipeline.Alert) error
+	Send(ctx context.Context, alert pipeline.Alert) error
 }
