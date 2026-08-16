@@ -180,9 +180,11 @@ func main() {
 			Reconciler:   rec,
 			Store:        store,
 			Log:          chainLog,
-			OnCanonical: func(ctx context.Context, b pipeline.BlockRef) {
+			OnCanonical: func(_ context.Context, b pipeline.BlockRef) {
 				chainLog.Info("canonical", "block", b.Number, "hash", fmt.Sprintf("%x", b.Hash[:6]))
-				logFetcher.OnCanonical(ctx, b)
+			},
+			OnCanonicalBatch: func(ctx context.Context, bs []pipeline.BlockRef) {
+				logFetcher.OnCanonicalBatch(ctx, bs)
 			},
 			OnReverted: func(ctx context.Context, b pipeline.BlockRef) {
 				chainLog.Warn("reverted", "block", b.Number, "hash", fmt.Sprintf("%x", b.Hash[:6]))

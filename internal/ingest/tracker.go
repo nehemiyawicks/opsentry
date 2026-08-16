@@ -19,16 +19,17 @@ type HeadFetcher interface {
 }
 
 type HeadTracker struct {
-	Chain        string
-	Interval     time.Duration
-	Tag          string
-	ConfirmDepth uint64
-	Reader       HeadFetcher
-	Reconciler   *Reconciler
-	Store        storage.Store
-	Log          *slog.Logger
-	OnCanonical  func(context.Context, pipeline.BlockRef)
-	OnReverted   func(context.Context, pipeline.BlockRef)
+	Chain            string
+	Interval         time.Duration
+	Tag              string
+	ConfirmDepth     uint64
+	Reader           HeadFetcher
+	Reconciler       *Reconciler
+	Store            storage.Store
+	Log              *slog.Logger
+	OnCanonical      func(context.Context, pipeline.BlockRef)
+	OnCanonicalBatch func(context.Context, []pipeline.BlockRef)
+	OnReverted       func(context.Context, pipeline.BlockRef)
 
 	mu      sync.Mutex
 	pending []pipeline.BlockRef
@@ -121,6 +122,9 @@ func (t *HeadTracker) pollOnce(ctx context.Context) error {
 		if t.OnCanonical != nil {
 			t.OnCanonical(ctx, b)
 		}
+	}
+	if len(emit) > 0 && t.OnCanonicalBatch != nil {
+		t.OnCanonicalBatch(ctx, emit)
 	}
 	if len(emit) > 0 {
 		newTip := emit[len(emit)-1]
