@@ -14,7 +14,7 @@ Watches the OptimismPortal proxy for Base at `0x49048044D57e1C92A77f79988d21Fa8f
 
 - **`Paused`** → severity `critical`. Somebody hit the emergency stop on Base's L1-to-L2 message pipe. Real ops incident.
 - **`Unpaused`** → severity `critical`. The stop was released. Confirms who and when.
-- **`TransactionDeposited`** with `value > 100 ETH` → severity `high`. Large deposit landing on the rollup; sometimes a coordinated flow, sometimes an anomaly worth eyeballing.
+- **`TransactionDeposited` + `state.paused == true`** → severity `critical`. **Invariant violation**: the contract should refuse deposits while paused, so this event firing with the pause bit set means either a contract bug or the check was somehow bypassed. Uses the new `reads` config to read `paused()` via `eth_call` at each block, then references it in the rule expression as `event.state.paused`.
 
 ### `base-system-config-l1.yaml` — Base's SystemConfig on L1
 
