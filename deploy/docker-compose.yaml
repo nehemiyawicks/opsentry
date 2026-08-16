@@ -33,5 +33,20 @@ services:
       timeout: 5s
       retries: 5
 
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - opsentry_prom:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+    ports:
+      - "9090:9090"
+    depends_on:
+      - opsentry
+
 volumes:
   opsentry_pg:
+  opsentry_prom:

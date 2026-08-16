@@ -37,7 +37,7 @@ Live evidence: 10s of runtime against Base pulls ~10 canonical blocks and surfac
 make compose-up
 ```
 
-Runs opsentry + postgres from `deploy/docker-compose.yaml`.
+Runs opsentry + postgres + Prometheus from `deploy/docker-compose.yaml`. Prometheus is available at [http://localhost:9090](http://localhost:9090) and already scrapes opsentry's `/metrics` — search `opsentry_alerts_sent_total`, `opsentry_head_lag_blocks`, `opsentry_reorgs_seen_total`, etc.
 
 ## Reference rulesets
 
