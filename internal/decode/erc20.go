@@ -1,6 +1,7 @@
 package decode
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -12,6 +13,11 @@ import (
 
 	"github.com/nehemiyawicks/opsentry/internal/pipeline"
 )
+
+type ABICache interface {
+	LoadCachedABI(ctx context.Context, chainID uint64, address common.Address) ([]byte, bool, error)
+	SaveCachedABI(ctx context.Context, chainID uint64, address common.Address, abiJSON []byte) error
+}
 
 const erc20ABIJSON = `[
   {"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"to","type":"address"},{"indexed":false,"name":"value","type":"uint256"}],"name":"Transfer","type":"event"},
@@ -31,6 +37,7 @@ type ABIDecoder struct {
 	monitors map[string]string
 	fetcher  *SourcifyFetcher
 	Log      *slog.Logger
+	Cache    ABICache
 }
 
 func NewDecoder() *ABIDecoder {
@@ -82,34 +89,56 @@ func (d *ABIDecoder) loadABI(ctx context.Context, spec MonitorSpec) (abi.ABI, er
 		if spec.ChainID == 0 {
 			return abi.ABI{}, fmt.Errorf("sourcify requires chain_id")
 		}
-		a, err := d.fetcher.Fetch(ctx, spec.ChainID, spec.Address)
+		if d.Cache != nil {
+			if data, ok, err := d.Cache.LoadCachedABI(ctx, spec.ChainID, spec.Address); err == nil && ok {
+				if a, perr := abi.JSON(bytes.NewReader(data)); perr == nil {
+					d.logger().Info("abi cache hit", "monitor", spec.ID, "address", spec.Address.Hex())
+					return a, nil
+				}
+			}
+		}
+		data, err := d.fetcher.FetchJSON(ctx, spec.ChainID, spec.Address)
 		if err != nil {
 			return abi.ABI{}, err
 		}
-		if !looksLikeProxy(a) {
-			return a, nil
-		}
-		log := d.logger().With("monitor", spec.ID, "proxy", spec.Address.Hex())
-		if spec.Storage == nil {
-			log.Warn("sourcify returned a proxy ABI but no StorageReader available; using proxy ABI")
-			return a, nil
-		}
-		impl, ok, err := readImplementationAddress(ctx, spec.Storage, spec.Address)
+		a, err := abi.JSON(bytes.NewReader(data))
 		if err != nil {
-			log.Warn("proxy implementation slot read failed; using proxy ABI", "err", err)
-			return a, nil
+			return abi.ABI{}, fmt.Errorf("parse abi: %w", err)
 		}
-		if !ok {
-			log.Warn("proxy detected but no known impl slot populated (EIP-1967 or OZ unstructured); using proxy ABI. If this is a token, use abi: erc20")
-			return a, nil
+		finalData := data
+		finalABI := a
+		if looksLikeProxy(a) {
+			log := d.logger().With("monitor", spec.ID, "proxy", spec.Address.Hex())
+			switch {
+			case spec.Storage == nil:
+				log.Warn("sourcify returned a proxy ABI but no StorageReader available; using proxy ABI")
+			default:
+				impl, ok, rerr := readImplementationAddress(ctx, spec.Storage, spec.Address)
+				switch {
+				case rerr != nil:
+					log.Warn("proxy implementation slot read failed; using proxy ABI", "err", rerr)
+				case !ok:
+					log.Warn("proxy detected but no known impl slot populated (EIP-1967 or OZ unstructured); using proxy ABI. If this is a token, use abi: erc20")
+				default:
+					implData, ferr := d.fetcher.FetchJSON(ctx, spec.ChainID, impl)
+					if ferr != nil {
+						log.Warn("proxy resolved but implementation ABI not on Sourcify; using proxy ABI", "impl", impl.Hex(), "err", ferr)
+					} else if implABI, perr := abi.JSON(bytes.NewReader(implData)); perr != nil {
+						log.Warn("proxy impl ABI parse failed; using proxy ABI", "impl", impl.Hex(), "err", perr)
+					} else {
+						log.Info("resolved proxy to implementation via Sourcify", "impl", impl.Hex())
+						finalData = implData
+						finalABI = implABI
+					}
+				}
+			}
 		}
-		implABI, err := d.fetcher.Fetch(ctx, spec.ChainID, impl)
-		if err != nil {
-			log.Warn("proxy resolved but implementation ABI not on Sourcify; using proxy ABI", "impl", impl.Hex(), "err", err)
-			return a, nil
+		if d.Cache != nil {
+			if err := d.Cache.SaveCachedABI(ctx, spec.ChainID, spec.Address, finalData); err != nil {
+				d.logger().Warn("abi cache save failed", "monitor", spec.ID, "err", err)
+			}
 		}
-		log.Info("resolved proxy to implementation via Sourcify", "impl", impl.Hex())
-		return implABI, nil
+		return finalABI, nil
 	case strings.HasPrefix(trimmed, "["):
 		return abi.JSON(strings.NewReader(trimmed))
 	default:

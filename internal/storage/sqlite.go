@@ -63,6 +63,13 @@ func migrate(db *sql.DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS alerts_chain_block ON alerts(chain, block_num)`,
 		`CREATE INDEX IF NOT EXISTS alerts_monitor ON alerts(monitor_id)`,
+		`CREATE TABLE IF NOT EXISTS abi_cache (
+			chain_id   INTEGER NOT NULL,
+			address    BLOB NOT NULL,
+			abi_json   TEXT NOT NULL,
+			fetched_at INTEGER NOT NULL,
+			PRIMARY KEY (chain_id, address)
+		)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -217,6 +224,31 @@ func (s *SQLiteStore) LoadAlertsAtBlock(ctx context.Context, chain string, block
 		out = append(out, sa)
 	}
 	return out, rows.Err()
+}
+
+func (s *SQLiteStore) LoadCachedABI(ctx context.Context, chainID uint64, address [20]byte) ([]byte, bool, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT abi_json FROM abi_cache WHERE chain_id = ? AND address = ?`,
+		int64(chainID), address[:])
+	var raw string
+	if err := row.Scan(&raw); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return []byte(raw), true, nil
+}
+
+func (s *SQLiteStore) SaveCachedABI(ctx context.Context, chainID uint64, address [20]byte, abiJSON []byte) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO abi_cache (chain_id, address, abi_json, fetched_at)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT(chain_id, address) DO UPDATE SET
+			abi_json   = excluded.abi_json,
+			fetched_at = excluded.fetched_at`,
+		int64(chainID), address[:], string(abiJSON), time.Now().Unix())
+	return err
 }
 
 func arr32(b []byte) [32]byte {

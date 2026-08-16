@@ -112,6 +112,7 @@ func main() {
 
 		decoder := decode.NewDecoder()
 		decoder.Log = chainLog
+		decoder.Cache = decode.NewStoreABICache(store.LoadCachedABI, store.SaveCachedABI)
 		for _, spec := range monitorSpecs(cfg.Monitors, ch) {
 			spec.Storage = client
 			if err := decoder.Register(ctx, spec); err != nil {
