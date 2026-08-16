@@ -1,5 +1,9 @@
 # opsentry
 
+[![CI](https://github.com/nehemiyawicks/opsentry/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nehemiyawicks/opsentry/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nehemiyawicks/opsentry)](https://goreportcard.com/report/github.com/nehemiyawicks/opsentry)
+
 Open-source contract monitoring and alerting for the OP Stack. Self-hostable, Apache-2.0.
 
 ## What it is
