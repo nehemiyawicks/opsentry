@@ -8,9 +8,10 @@ For your real deployment, take the `monitors:` blocks you want, drop them into y
 
 ## What's here
 
-- **`op-stack/`** — Superchain / OP-Stack system contracts. Portal pause events, SystemConfig changes, L2 withdrawal message passer. Sourced from the invariants in [`ethereum-optimism/monitorism`](https://github.com/ethereum-optimism/monitorism).
+- **`op-stack/`** — Superchain / OP-Stack system contracts. Portal pause events, SystemConfig changes, L2 withdrawal message passer, cross-domain messenger. Sourced from the invariants in [`ethereum-optimism/monitorism`](https://github.com/ethereum-optimism/monitorism).
 - **`uniswap-v3/`** — Uniswap V3 factory and pools.
 - **`aave-v3/`** — Aave V3 lending pool.
+- **`tokens/`** — High-volume ERC-20 large-transfer alerts (USDC, WETH on Base). Copy-adapt for any ERC-20.
 
 ## Verifying addresses
 

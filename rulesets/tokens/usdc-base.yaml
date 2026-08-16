@@ -1,0 +1,43 @@
+chains:
+  - id: base
+    chain_id: 8453
+    rpcs:
+      - url: https://mainnet.base.org
+        weight: 100
+    block_time_ms: 2000
+    confirmations:
+      fast: 3
+      safe: safe
+      finalized: finalized
+    reorg_check: hash_chain
+    recovery:
+      enabled: true
+      interval: 5m
+      max_blocks_per_run: 50
+      max_retries: 3
+
+receivers:
+  - id: high
+    type: log
+    url: ""
+    throttle:
+      min_interval: 5s
+    template:
+      title: "[HIGH] Large USDC transfer on Base"
+      body: |
+        value=${event.params.value} (raw, 6 decimals)
+        from=${event.params.from}
+        to=${event.params.to}
+        tx=${event.log.tx_hash}
+        block=${event.log.block.number}
+
+monitors:
+  - id: usdc-large-transfer-base
+    chain: base
+    address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    abi: erc20
+    confirmation: fast
+    rules:
+      - when: 'event.name == "Transfer" && event.params.value > 100000e6'
+        severity: high
+        receivers: [high]
