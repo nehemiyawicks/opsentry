@@ -37,12 +37,13 @@ var (
 
 func main() {
 	var cfgPath, addr, dbPath string
-	var showVersion, checkOnly bool
+	var showVersion, checkOnly, refreshABI bool
 	flag.StringVar(&cfgPath, "config", "config.yaml", "path to config file")
 	flag.StringVar(&addr, "http.addr", ":8080", "http listen address")
 	flag.StringVar(&dbPath, "db", "opsentry.db", "path to sqlite database")
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.BoolVar(&checkOnly, "check", false, "validate config, compile rules, and exit")
+	flag.BoolVar(&refreshABI, "refresh-abi", false, "clear cached ABIs at startup (forces refetch from Sourcify)")
 	flag.Parse()
 
 	if showVersion {
@@ -75,6 +76,14 @@ func main() {
 		log.Fatalf("open db: %v", err)
 	}
 	defer store.Close()
+
+	if refreshABI {
+		n, err := store.ClearABICache(context.Background())
+		if err != nil {
+			log.Fatalf("clear abi cache: %v", err)
+		}
+		logger.Info("abi cache cleared", "rows", n)
+	}
 
 	router, err := notify.BuildRouter(cfg.Receivers, logger)
 	if err != nil {

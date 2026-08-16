@@ -240,6 +240,15 @@ func (s *SQLiteStore) LoadCachedABI(ctx context.Context, chainID uint64, address
 	return []byte(raw), true, nil
 }
 
+func (s *SQLiteStore) ClearABICache(ctx context.Context) (int, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM abi_cache`)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	return int(n), err
+}
+
 func (s *SQLiteStore) SaveCachedABI(ctx context.Context, chainID uint64, address [20]byte, abiJSON []byte) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO abi_cache (chain_id, address, abi_json, fetched_at)

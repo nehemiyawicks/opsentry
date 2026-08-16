@@ -21,6 +21,7 @@ type Store interface {
 	LoadAlertsAtBlock(ctx context.Context, chain string, blockNumber uint64, blockHash [32]byte) ([]StoredAlert, error)
 	LoadCachedABI(ctx context.Context, chainID uint64, address [20]byte) ([]byte, bool, error)
 	SaveCachedABI(ctx context.Context, chainID uint64, address [20]byte, abiJSON []byte) error
+	ClearABICache(ctx context.Context) (int, error)
 	Close() error
 }
 

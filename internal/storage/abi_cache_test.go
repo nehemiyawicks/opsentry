@@ -58,6 +58,31 @@ func TestABICacheKeyedByChain(t *testing.T) {
 	}
 }
 
+func TestClearABICacheRemovesAll(t *testing.T) {
+	s, err := OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+
+	var addr [20]byte
+	addr[19] = 0x42
+	_ = s.SaveCachedABI(ctx, 1, addr, []byte(`"a"`))
+	_ = s.SaveCachedABI(ctx, 2, addr, []byte(`"b"`))
+
+	n, err := s.ClearABICache(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("expected 2 rows cleared, got %d", n)
+	}
+	if _, ok, _ := s.LoadCachedABI(ctx, 1, addr); ok {
+		t.Fatal("expected cache empty after clear")
+	}
+}
+
 func TestABICacheUpsertReplaces(t *testing.T) {
 	s, err := OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
