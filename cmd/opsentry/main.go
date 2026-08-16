@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -108,6 +109,8 @@ func main() {
 	}()
 	logger.Info("http listening", "addr", addr)
 
+	evaluators := make(map[string]*atomic.Pointer[rules.ExprEvaluator])
+
 	var wg sync.WaitGroup
 	for _, ch := range cfg.Chains {
 		if len(ch.RPCs) == 0 {
@@ -150,11 +153,14 @@ func main() {
 		}
 
 		stateReaders := buildStateReaders(cfg.Monitors, ch.ID, client, chainLog)
-		evaluator, err := rules.NewExprEvaluator(monitorRules(cfg.Monitors, ch.ID))
+		initialEvaluator, err := rules.NewExprEvaluator(monitorRules(cfg.Monitors, ch.ID))
 		if err != nil {
 			logger.Error("rule compile failed, skipping chain", "chain", ch.ID, "err", err)
 			continue
 		}
+		evalHolder := &atomic.Pointer[rules.ExprEvaluator]{}
+		evalHolder.Store(initialEvaluator)
+		evaluators[ch.ID] = evalHolder
 
 		logFetcher := &ingest.LogFetcher{
 			Chain:     ch.ID,
@@ -170,7 +176,7 @@ func main() {
 				if r, ok := stateReaders[ev.MonitorID]; ok {
 					r.Enrich(ctx, &ev)
 				}
-				matches, err := evaluator.Eval(ctx, ev)
+				matches, err := evalHolder.Load().Eval(ctx, ev)
 				if err != nil {
 					chainLog.Warn("evaluate", "err", err)
 					return
@@ -253,6 +259,19 @@ func main() {
 		}(ch.ID)
 	}
 
+	hupCh := make(chan os.Signal, 1)
+	signal.Notify(hupCh, syscall.SIGHUP)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-hupCh:
+				reloadRules(cfgPath, evaluators, logger)
+			}
+		}
+	}()
+
 	<-ctx.Done()
 	logger.Info("shutting down")
 	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -260,6 +279,25 @@ func main() {
 	_ = srv.Shutdown(shutdown)
 	wg.Wait()
 	logger.Info("opsentry stopped")
+}
+
+func reloadRules(cfgPath string, evaluators map[string]*atomic.Pointer[rules.ExprEvaluator], logger *slog.Logger) {
+	newCfg, err := config.Load(cfgPath)
+	if err != nil {
+		logger.Warn("hot-reload: config load failed, keeping current rules", "err", err)
+		return
+	}
+	reloaded := 0
+	for chainID, holder := range evaluators {
+		newEval, err := rules.NewExprEvaluator(monitorRules(newCfg.Monitors, chainID))
+		if err != nil {
+			logger.Warn("hot-reload: rule compile failed for chain, keeping current rules", "chain", chainID, "err", err)
+			continue
+		}
+		holder.Store(newEval)
+		reloaded++
+	}
+	logger.Info("hot-reload: rules reloaded", "chains", reloaded)
 }
 
 func openStore(dbPath string) (storage.Store, error) {
