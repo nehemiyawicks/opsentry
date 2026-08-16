@@ -28,6 +28,14 @@ Watches the `L2ToL1MessagePasser` predeploy at `0x420000000000000000000000000000
 
 - **`MessagePassed`** with `value > 100 ETH` → severity `high`. Large native-ETH withdrawal from the rollup. Not necessarily malicious but worth attention.
 
+### `base-l1-standard-bridge.yaml` — Base's L1StandardBridge on L1
+
+Watches the `L1StandardBridge` for Base at `0x3154Cf16ccdb4C6d922629664174b904d80F2C35` on Ethereum mainnet. Fires on:
+
+- **`ETHDepositInitiated`** with `amount > 100 ETH` → severity `high`. Large ETH deposit landing on Base. Not necessarily malicious but worth attention.
+
+Also decodes `ERC20DepositInitiated` (not thresholded by default; per-token thresholds would need per-monitor rules since token decimals differ). This mirrors the L2 side already covered by `l2-message-passer.yaml` (withdrawals) - together they give visibility into both directions of the bridge.
+
 ### `l2-cross-domain-messenger.yaml` — L2CrossDomainMessenger on L2
 
 Watches the `L2CrossDomainMessenger` predeploy at `0x4200000000000000000000000000000000000007` on L2. Decodes `SentMessage`, `RelayedMessage`, and `FailedRelayedMessage`. Fires on:

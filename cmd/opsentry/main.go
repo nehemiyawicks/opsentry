@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"text/tabwriter"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -39,13 +40,14 @@ var (
 
 func main() {
 	var cfgPath, addr, dbPath string
-	var showVersion, checkOnly, refreshABI bool
+	var showVersion, checkOnly, refreshABI, listMonitors bool
 	flag.StringVar(&cfgPath, "config", "config.yaml", "path to config file")
 	flag.StringVar(&addr, "http.addr", ":8080", "http listen address")
 	flag.StringVar(&dbPath, "db", "opsentry.db", "path to sqlite database")
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.BoolVar(&checkOnly, "check", false, "validate config, compile rules, and exit")
 	flag.BoolVar(&refreshABI, "refresh-abi", false, "clear cached ABIs at startup (forces refetch from Sourcify)")
+	flag.BoolVar(&listMonitors, "list-monitors", false, "print configured monitors and exit")
 	flag.Parse()
 
 	if showVersion {
@@ -59,6 +61,14 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println("config OK")
+		return
+	}
+
+	if listMonitors {
+		if err := listMonitorsCmd(cfgPath); err != nil {
+			fmt.Fprintf(os.Stderr, "list monitors failed: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	}
 
@@ -298,6 +308,34 @@ func reloadRules(cfgPath string, evaluators map[string]*atomic.Pointer[rules.Exp
 		reloaded++
 	}
 	logger.Info("hot-reload: rules reloaded", "chains", reloaded)
+}
+
+func listMonitorsCmd(path string) error {
+	cfg, err := config.Load(path)
+	if err != nil {
+		return err
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tCHAIN\tADDRESS\tABI\tCONFIRMATION\tREADS\tRULES")
+	for _, m := range cfg.Monitors {
+		addr := m.Address
+		if len(addr) > 20 {
+			addr = addr[:12] + "..."
+		}
+		conf := m.Confirmation
+		if conf == "" {
+			conf = "fast"
+		}
+		abi := m.ABI
+		if strings.HasPrefix(strings.TrimSpace(abi), "[") {
+			abi = fmt.Sprintf("inline (%dB)", len(abi))
+		} else if abi == "" {
+			abi = "-"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\t%d\n",
+			m.ID, m.Chain, addr, abi, conf, len(m.Reads), len(m.Rules))
+	}
+	return w.Flush()
 }
 
 func openStore(dbPath string) (storage.Store, error) {

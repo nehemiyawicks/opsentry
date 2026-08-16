@@ -1,0 +1,49 @@
+chains:
+  - id: ethereum-mainnet
+    chain_id: 1
+    rpcs:
+      - url: https://eth.llamarpc.com
+        weight: 100
+    block_time_ms: 12000
+    confirmations:
+      fast: 3
+      safe: safe
+      finalized: finalized
+    reorg_check: hash_chain
+    recovery:
+      enabled: true
+      interval: 5m
+      max_blocks_per_run: 50
+      max_retries: 3
+
+receivers:
+  - id: high
+    type: log
+    url: ""
+    throttle:
+      min_interval: 10s
+    template:
+      title: "[HIGH] Large deposit on Base L1StandardBridge"
+      body: |
+        l1Token=${event.params.l1Token}
+        l2Token=${event.params.l2Token}
+        from=${event.params.from}
+        to=${event.params.to}
+        amount=${event.params.amount}
+        tx=${event.log.tx_hash}
+        block=${event.log.block.number}
+
+monitors:
+  - id: base-l1-standard-bridge
+    chain: ethereum-mainnet
+    address: "0x3154Cf16ccdb4C6d922629664174b904d80F2C35"
+    abi: |
+      [
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"l1Token","type":"address"},{"indexed":true,"name":"l2Token","type":"address"},{"indexed":true,"name":"from","type":"address"},{"indexed":false,"name":"to","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"extraData","type":"bytes"}],"name":"ERC20DepositInitiated","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"to","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"extraData","type":"bytes"}],"name":"ETHDepositInitiated","type":"event"}
+      ]
+    confirmation: safe
+    rules:
+      - when: 'event.name == "ETHDepositInitiated" && event.params.amount > 100e18'
+        severity: high
+        receivers: [high]
