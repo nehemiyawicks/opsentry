@@ -7,6 +7,7 @@ import (
 	"time"
 
 	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	gethrpc "github.com/ethereum/go-ethereum/rpc"
@@ -52,6 +53,10 @@ func (c *Client) HeadByTag(ctx context.Context, tag string) (pipeline.BlockRef, 
 
 func (c *Client) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
 	return c.eth.FilterLogs(ctx, q)
+}
+
+func (c *Client) StorageAt(ctx context.Context, address common.Address, slot common.Hash) ([]byte, error) {
+	return c.eth.StorageAt(ctx, address, slot, nil)
 }
 
 func toRef(chain string, h *types.Header) pipeline.BlockRef {

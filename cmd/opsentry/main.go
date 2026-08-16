@@ -111,7 +111,9 @@ func main() {
 		chainLog.Info("aggregated monitor addresses", "count", len(addrs))
 
 		decoder := decode.NewDecoder()
+		decoder.Log = chainLog
 		for _, spec := range monitorSpecs(cfg.Monitors, ch) {
+			spec.Storage = client
 			if err := decoder.Register(ctx, spec); err != nil {
 				chainLog.Warn("skip monitor: abi load failed", "monitor", spec.ID, "err", err)
 			}

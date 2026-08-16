@@ -3,6 +3,7 @@ package decode
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"strings"
 
@@ -22,12 +23,14 @@ type MonitorSpec struct {
 	ChainID uint64
 	Address common.Address
 	ABI     string
+	Storage StorageReader
 }
 
 type ABIDecoder struct {
 	abis     map[string]abi.ABI
 	monitors map[string]string
 	fetcher  *SourcifyFetcher
+	Log      *slog.Logger
 }
 
 func NewDecoder() *ABIDecoder {
@@ -36,6 +39,13 @@ func NewDecoder() *ABIDecoder {
 		monitors: make(map[string]string),
 		fetcher:  NewSourcifyFetcher(),
 	}
+}
+
+func (d *ABIDecoder) logger() *slog.Logger {
+	if d.Log != nil {
+		return d.Log
+	}
+	return slog.Default()
 }
 
 func NewERC20Decoder(addrToMonitor map[string]string) (*ABIDecoder, error) {
@@ -72,7 +82,34 @@ func (d *ABIDecoder) loadABI(ctx context.Context, spec MonitorSpec) (abi.ABI, er
 		if spec.ChainID == 0 {
 			return abi.ABI{}, fmt.Errorf("sourcify requires chain_id")
 		}
-		return d.fetcher.Fetch(ctx, spec.ChainID, spec.Address)
+		a, err := d.fetcher.Fetch(ctx, spec.ChainID, spec.Address)
+		if err != nil {
+			return abi.ABI{}, err
+		}
+		if !looksLikeProxy(a) {
+			return a, nil
+		}
+		log := d.logger().With("monitor", spec.ID, "proxy", spec.Address.Hex())
+		if spec.Storage == nil {
+			log.Warn("sourcify returned a proxy ABI but no StorageReader available; using proxy ABI")
+			return a, nil
+		}
+		impl, ok, err := readImplementationAddress(ctx, spec.Storage, spec.Address)
+		if err != nil {
+			log.Warn("proxy implementation slot read failed; using proxy ABI", "err", err)
+			return a, nil
+		}
+		if !ok {
+			log.Warn("proxy detected but no known impl slot populated (EIP-1967 or OZ unstructured); using proxy ABI. If this is a token, use abi: erc20")
+			return a, nil
+		}
+		implABI, err := d.fetcher.Fetch(ctx, spec.ChainID, impl)
+		if err != nil {
+			log.Warn("proxy resolved but implementation ABI not on Sourcify; using proxy ABI", "impl", impl.Hex(), "err", err)
+			return a, nil
+		}
+		log.Info("resolved proxy to implementation via Sourcify", "impl", impl.Hex())
+		return implABI, nil
 	case strings.HasPrefix(trimmed, "["):
 		return abi.JSON(strings.NewReader(trimmed))
 	default:
