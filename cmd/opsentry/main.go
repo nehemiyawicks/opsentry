@@ -114,12 +114,17 @@ func main() {
 			logger.Warn("chain has no rpcs, skipping", "chain", ch.ID)
 			continue
 		}
-		client, err := rpc.Dial(ctx, ch.ID, ch.RPCs[0].URL)
+		endpoints := make([]rpc.EndpointSpec, 0, len(ch.RPCs))
+		for _, r := range ch.RPCs {
+			endpoints = append(endpoints, rpc.EndpointSpec{URL: r.URL, Weight: r.Weight})
+		}
+		client, err := rpc.Dial(ctx, ch.ID, endpoints)
 		if err != nil {
 			logger.Error("rpc dial failed, skipping chain", "chain", ch.ID, "err", err)
 			continue
 		}
 		defer client.Close()
+		logger.Info("rpc pool ready", "chain", ch.ID, "endpoints", len(endpoints))
 
 		rec := ingest.NewReconciler(ch.ID, 256, client)
 		interval := time.Duration(ch.BlockTimeMs) * time.Millisecond
