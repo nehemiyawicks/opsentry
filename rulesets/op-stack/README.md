@@ -28,6 +28,14 @@ Watches the `L2ToL1MessagePasser` predeploy at `0x420000000000000000000000000000
 
 - **`MessagePassed`** with `value > 100 ETH` → severity `high`. Large native-ETH withdrawal from the rollup. Not necessarily malicious but worth attention.
 
+### `l2-cross-domain-messenger.yaml` — L2CrossDomainMessenger on L2
+
+Watches the `L2CrossDomainMessenger` predeploy at `0x4200000000000000000000000000000000000007` on L2. Decodes `SentMessage`, `RelayedMessage`, and `FailedRelayedMessage`. Fires on:
+
+- **`FailedRelayedMessage`** → severity `high`. An L1-to-L2 message reached L2 but the target contract reverted. Either the target had a bug, the message was crafted wrong, or something about the L2 state was unexpected. Worth investigating per-occurrence.
+
+The other decoded events aren't rule-thresholded by default (high volume). Add rules against them if you want an audit stream.
+
 ## Address verification
 
 Base's L1 addresses were sourced from [superchain-registry](https://github.com/ethereum-optimism/superchain-registry/blob/main/superchain/configs/mainnet/base.toml). L2 predeploys are documented in the [OP Stack specs](https://specs.optimism.io/protocol/predeploys.html).

@@ -37,15 +37,25 @@ var (
 
 func main() {
 	var cfgPath, addr, dbPath string
-	var showVersion bool
+	var showVersion, checkOnly bool
 	flag.StringVar(&cfgPath, "config", "config.yaml", "path to config file")
 	flag.StringVar(&addr, "http.addr", ":8080", "http listen address")
 	flag.StringVar(&dbPath, "db", "opsentry.db", "path to sqlite database")
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
+	flag.BoolVar(&checkOnly, "check", false, "validate config, compile rules, and exit")
 	flag.Parse()
 
 	if showVersion {
 		fmt.Printf("opsentry %s (%s)\n", version, commit)
+		return
+	}
+
+	if checkOnly {
+		if err := checkConfig(cfgPath); err != nil {
+			fmt.Fprintf(os.Stderr, "config check failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("config OK")
 		return
 	}
 
@@ -232,6 +242,23 @@ func main() {
 	_ = srv.Shutdown(shutdown)
 	wg.Wait()
 	logger.Info("opsentry stopped")
+}
+
+func checkConfig(path string) error {
+	cfg, err := config.Load(path)
+	if err != nil {
+		return err
+	}
+	if _, err := notify.BuildRouter(cfg.Receivers, nil); err != nil {
+		return fmt.Errorf("receivers: %w", err)
+	}
+	for _, ch := range cfg.Chains {
+		if _, err := rules.NewExprEvaluator(monitorRules(cfg.Monitors, ch.ID)); err != nil {
+			return fmt.Errorf("chain %s rules: %w", ch.ID, err)
+		}
+	}
+	fmt.Printf("chains=%d receivers=%d monitors=%d\n", len(cfg.Chains), len(cfg.Receivers), len(cfg.Monitors))
+	return nil
 }
 
 func monitorAddresses(monitors []config.Monitor, chain string) []common.Address {
