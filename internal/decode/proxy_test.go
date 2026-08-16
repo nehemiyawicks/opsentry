@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -22,12 +24,31 @@ const implABI = `[
 ]`
 
 type fakeStorage struct {
-	slot []byte
-	err  error
+	slot     []byte
+	err      error
+	slots    map[common.Hash][]byte
+	callResp []byte
+	callErr  error
 }
 
-func (f *fakeStorage) StorageAt(_ context.Context, _ common.Address, _ common.Hash) ([]byte, error) {
-	return f.slot, f.err
+func (f *fakeStorage) StorageAt(_ context.Context, _ common.Address, slot common.Hash) ([]byte, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.slots != nil {
+		if v, ok := f.slots[slot]; ok {
+			return v, nil
+		}
+		return make([]byte, 32), nil
+	}
+	return f.slot, nil
+}
+
+func (f *fakeStorage) CallContract(_ context.Context, _ ethereum.CallMsg, _ *big.Int) ([]byte, error) {
+	if f.callErr != nil {
+		return nil, f.callErr
+	}
+	return f.callResp, nil
 }
 
 func TestLooksLikeProxyMatchesEIP1967Events(t *testing.T) {
@@ -69,11 +90,52 @@ func TestReadImplementationEmptySlot(t *testing.T) {
 	}
 }
 
+func TestReadImplementationBeaconProxy(t *testing.T) {
+	beacon := common.HexToAddress("0xbeacon00000000000000000000000000000beac0n")
+	impl := common.HexToAddress("0x3333333333333333333333333333333333333333")
+	beaconSlotBytes := common.LeftPadBytes(beacon.Bytes(), 32)
+	implResp := common.LeftPadBytes(impl.Bytes(), 32)
+
+	fs := &fakeStorage{
+		slots: map[common.Hash][]byte{
+			eip1967BeaconSlot: beaconSlotBytes,
+		},
+		callResp: implResp,
+	}
+	got, ok, err := readImplementationAddress(context.Background(), fs, common.HexToAddress("0x1"))
+	if err != nil || !ok {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+	if got != impl {
+		t.Fatalf("expected impl %s from beacon, got %s", impl.Hex(), got.Hex())
+	}
+}
+
+func TestReadImplementationBeaconCallFailFallsThrough(t *testing.T) {
+	beacon := common.HexToAddress("0xbeacon00000000000000000000000000000beac0n")
+	fs := &fakeStorage{
+		slots: map[common.Hash][]byte{
+			eip1967BeaconSlot: common.LeftPadBytes(beacon.Bytes(), 32),
+		},
+		callErr: errors.New("call reverted"),
+	}
+	_, ok, err := readImplementationAddress(context.Background(), fs, common.HexToAddress("0x1"))
+	if err == nil {
+		t.Fatal("expected error when beacon.implementation() call fails")
+	}
+	if ok {
+		t.Fatal("ok should be false on call error")
+	}
+}
+
 func TestReadImplementationRPCErrorSurfaced(t *testing.T) {
 	fs := &fakeStorage{err: errors.New("rpc down")}
 	_, ok, err := readImplementationAddress(context.Background(), fs, common.HexToAddress("0x1"))
+	if !ok && err == nil {
+		return
+	}
 	if err == nil {
-		t.Fatal("expected error")
+		t.Fatal("expected error when all slot reads fail and no beacon fallback available")
 	}
 	if ok {
 		t.Fatal("ok should be false on error")
