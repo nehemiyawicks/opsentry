@@ -160,14 +160,26 @@ func main() {
 			},
 		}
 
+		confirmDepth := uint64(ch.Confirmations.Fast)
+		for _, m := range cfg.Monitors {
+			if m.Chain != ch.ID {
+				continue
+			}
+			if m.Confirmation != "" && m.Confirmation != "fast" {
+				chainLog.Warn("monitor confirmation mode not yet supported, treating as fast",
+					"monitor", m.ID, "requested", m.Confirmation,
+					"note", "safe/finalized tag polling is a follow-up; chain.confirmations.fast applies to all monitors")
+			}
+		}
 		tracker := &ingest.HeadTracker{
-			Chain:      ch.ID,
-			Interval:   interval,
-			Tag:        "latest",
-			Reader:     client,
-			Reconciler: rec,
-			Store:      store,
-			Log:        chainLog,
+			Chain:        ch.ID,
+			Interval:     interval,
+			Tag:          "latest",
+			ConfirmDepth: confirmDepth,
+			Reader:       client,
+			Reconciler:   rec,
+			Store:        store,
+			Log:          chainLog,
 			OnCanonical: func(ctx context.Context, b pipeline.BlockRef) {
 				chainLog.Info("canonical", "block", b.Number, "hash", fmt.Sprintf("%x", b.Hash[:6]))
 				logFetcher.OnCanonical(ctx, b)

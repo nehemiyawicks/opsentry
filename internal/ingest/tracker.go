@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/nehemiyawicks/opsentry/internal/obs"
@@ -17,15 +19,19 @@ type HeadFetcher interface {
 }
 
 type HeadTracker struct {
-	Chain       string
-	Interval    time.Duration
-	Tag         string
-	Reader      HeadFetcher
-	Reconciler  *Reconciler
-	Store       storage.Store
-	Log         *slog.Logger
-	OnCanonical func(context.Context, pipeline.BlockRef)
-	OnReverted  func(context.Context, pipeline.BlockRef)
+	Chain        string
+	Interval     time.Duration
+	Tag          string
+	ConfirmDepth uint64
+	Reader       HeadFetcher
+	Reconciler   *Reconciler
+	Store        storage.Store
+	Log          *slog.Logger
+	OnCanonical  func(context.Context, pipeline.BlockRef)
+	OnReverted   func(context.Context, pipeline.BlockRef)
+
+	mu      sync.Mutex
+	pending []pipeline.BlockRef
 }
 
 func (t *HeadTracker) Run(ctx context.Context) error {
@@ -71,7 +77,44 @@ func (t *HeadTracker) pollOnce(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("reconcile: %w", err)
 	}
-	for _, b := range res.Canonical {
+
+	t.mu.Lock()
+	t.pending = append(t.pending, res.Canonical...)
+	for _, r := range res.Reverted {
+		removed := false
+		for i, p := range t.pending {
+			if p.Number == r.Number && p.Hash == r.Hash {
+				t.pending = append(t.pending[:i], t.pending[i+1:]...)
+				removed = true
+				break
+			}
+		}
+		if !removed {
+			obs.ReorgsSeen.WithLabelValues(t.Chain, "any").Inc()
+			if t.OnReverted != nil {
+				t.OnReverted(ctx, r)
+			}
+		}
+	}
+
+	threshold := uint64(0)
+	if head.Number > t.ConfirmDepth {
+		threshold = head.Number - t.ConfirmDepth
+	}
+	var emit, keep []pipeline.BlockRef
+	for _, b := range t.pending {
+		if b.Number <= threshold {
+			emit = append(emit, b)
+		} else {
+			keep = append(keep, b)
+		}
+	}
+	t.pending = keep
+	t.mu.Unlock()
+
+	sort.SliceStable(emit, func(i, j int) bool { return emit[i].Number < emit[j].Number })
+
+	for _, b := range emit {
 		if err := t.Store.RememberBlock(ctx, b); err != nil {
 			t.logger().Warn("remember block", "chain", t.Chain, "block", b.Number, "err", err)
 		}
@@ -79,14 +122,8 @@ func (t *HeadTracker) pollOnce(ctx context.Context) error {
 			t.OnCanonical(ctx, b)
 		}
 	}
-	for _, b := range res.Reverted {
-		obs.ReorgsSeen.WithLabelValues(t.Chain, "any").Inc()
-		if t.OnReverted != nil {
-			t.OnReverted(ctx, b)
-		}
-	}
-	if len(res.Canonical) > 0 {
-		newTip := res.Canonical[len(res.Canonical)-1]
+	if len(emit) > 0 {
+		newTip := emit[len(emit)-1]
 		if err := t.Store.SaveCursor(ctx, storage.Cursor{Chain: t.Chain, Block: newTip}); err != nil {
 			return fmt.Errorf("save cursor: %w", err)
 		}
