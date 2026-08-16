@@ -24,6 +24,7 @@ import (
 	"github.com/nehemiyawicks/opsentry/internal/notify"
 	"github.com/nehemiyawicks/opsentry/internal/obs"
 	"github.com/nehemiyawicks/opsentry/internal/pipeline"
+	"github.com/nehemiyawicks/opsentry/internal/reads"
 	"github.com/nehemiyawicks/opsentry/internal/rpc"
 	"github.com/nehemiyawicks/opsentry/internal/rules"
 	"github.com/nehemiyawicks/opsentry/internal/storage"
@@ -119,6 +120,8 @@ func main() {
 				chainLog.Warn("skip monitor: abi load failed", "monitor", spec.ID, "err", err)
 			}
 		}
+
+		stateReaders := buildStateReaders(cfg.Monitors, ch.ID, client, chainLog)
 		evaluator, err := rules.NewExprEvaluator(monitorRules(cfg.Monitors, ch.ID))
 		if err != nil {
 			logger.Error("rule compile failed, skipping chain", "chain", ch.ID, "err", err)
@@ -135,6 +138,9 @@ func main() {
 				if err != nil {
 					chainLog.Debug("decode", "err", err)
 					return
+				}
+				if r, ok := stateReaders[ev.MonitorID]; ok {
+					r.Enrich(ctx, &ev)
 				}
 				matches, err := evaluator.Eval(ctx, ev)
 				if err != nil {
@@ -257,6 +263,35 @@ func monitorSpecs(monitors []config.Monitor, ch config.Chain) []decode.MonitorSp
 			Address: common.HexToAddress(m.Address),
 			ABI:     m.ABI,
 		})
+	}
+	return out
+}
+
+func buildStateReaders(monitors []config.Monitor, chain string, client *rpc.Client, logger *slog.Logger) map[string]*reads.Reader {
+	out := make(map[string]*reads.Reader)
+	for _, m := range monitors {
+		if m.Chain != chain || len(m.Reads) == 0 {
+			continue
+		}
+		defs := make([]reads.Def, 0, len(m.Reads))
+		for _, r := range m.Reads {
+			if r.Output == "" {
+				logger.Warn("skipping state read without output type", "monitor", m.ID, "read", r.Name)
+				continue
+			}
+			defs = append(defs, reads.Def{Name: r.Name, Method: r.Method, Output: r.Output})
+		}
+		if len(defs) == 0 {
+			continue
+		}
+		out[m.ID] = &reads.Reader{
+			MonitorID: m.ID,
+			Address:   common.HexToAddress(m.Address),
+			Defs:      defs,
+			Client:    client,
+			Log:       logger,
+		}
+		logger.Info("state reader configured", "monitor", m.ID, "reads", len(defs))
 	}
 	return out
 }

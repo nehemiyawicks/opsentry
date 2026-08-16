@@ -59,6 +59,10 @@ func (c *Client) StorageAt(ctx context.Context, address common.Address, slot com
 	return c.eth.StorageAt(ctx, address, slot, nil)
 }
 
+func (c *Client) CallContract(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
+	return c.eth.CallContract(ctx, msg, blockNumber)
+}
+
 func toRef(chain string, h *types.Header) pipeline.BlockRef {
 	var hash, parent [32]byte
 	copy(hash[:], h.Hash().Bytes())

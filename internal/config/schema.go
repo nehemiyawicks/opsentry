@@ -70,6 +70,7 @@ type Monitor struct {
 type Read struct {
 	Name   string `yaml:"name"`
 	Method string `yaml:"method"`
+	Output string `yaml:"output"`
 }
 
 type Rule struct {

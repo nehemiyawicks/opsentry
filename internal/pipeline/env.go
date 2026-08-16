@@ -3,10 +3,22 @@ package pipeline
 import "fmt"
 
 func EventEnv(ev Event) map[string]any {
+	state := ev.State
+	if state == nil {
+		state = map[string]any{}
+	}
+	prevState := ev.PrevState
+	if prevState == nil {
+		prevState = map[string]any{}
+	}
 	return map[string]any{
 		"name":       ev.Name,
 		"monitor_id": ev.MonitorID,
 		"params":     ev.Params,
+		"state":      state,
+		"prev": map[string]any{
+			"state": prevState,
+		},
 		"log": map[string]any{
 			"chain":     ev.Log.Chain,
 			"address":   fmt.Sprintf("0x%x", ev.Log.Address[:]),
