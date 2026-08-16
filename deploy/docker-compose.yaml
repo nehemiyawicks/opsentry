@@ -3,7 +3,10 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    command: ["-config=/etc/opsentry/config.yaml", "-http.addr=:8080"]
+    command:
+      - "-config=/etc/opsentry/config.yaml"
+      - "-http.addr=:8080"
+      - "-db=postgres://opsentry:opsentry@postgres:5432/opsentry?sslmode=disable"
     ports:
       - "8080:8080"
     volumes:

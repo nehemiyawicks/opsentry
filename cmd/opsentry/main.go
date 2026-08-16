@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -71,7 +72,7 @@ func main() {
 	}
 	logger.Info("config loaded", "chains", len(cfg.Chains), "receivers", len(cfg.Receivers), "monitors", len(cfg.Monitors))
 
-	store, err := storage.OpenSQLite(dbPath)
+	store, err := openStore(dbPath)
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
@@ -251,6 +252,13 @@ func main() {
 	_ = srv.Shutdown(shutdown)
 	wg.Wait()
 	logger.Info("opsentry stopped")
+}
+
+func openStore(dbPath string) (storage.Store, error) {
+	if strings.HasPrefix(dbPath, "postgres://") || strings.HasPrefix(dbPath, "postgresql://") {
+		return storage.OpenPostgres(context.Background(), dbPath)
+	}
+	return storage.OpenSQLite(dbPath)
 }
 
 func checkConfig(path string) error {
