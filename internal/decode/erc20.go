@@ -33,11 +33,12 @@ type MonitorSpec struct {
 }
 
 type ABIDecoder struct {
-	abis     map[string]abi.ABI
-	monitors map[string]string
-	fetcher  *SourcifyFetcher
-	Log      *slog.Logger
-	Cache    ABICache
+	abis      map[string]abi.ABI
+	monitors  map[string]string
+	fetcher   *SourcifyFetcher
+	Etherscan *EtherscanFetcher
+	Log       *slog.Logger
+	Cache     ABICache
 }
 
 func NewDecoder() *ABIDecoder {
@@ -99,7 +100,16 @@ func (d *ABIDecoder) loadABI(ctx context.Context, spec MonitorSpec) (abi.ABI, er
 		}
 		data, err := d.fetcher.FetchJSON(ctx, spec.ChainID, spec.Address)
 		if err != nil {
-			return abi.ABI{}, err
+			if d.Etherscan != nil && d.Etherscan.APIKey != "" {
+				d.logger().Info("sourcify miss, trying etherscan fallback", "monitor", spec.ID, "err", err)
+				if esData, esErr := d.Etherscan.FetchJSON(ctx, spec.ChainID, spec.Address); esErr == nil {
+					data = esData
+				} else {
+					return abi.ABI{}, fmt.Errorf("both sourcify and etherscan failed: sourcify=%v; etherscan=%v", err, esErr)
+				}
+			} else {
+				return abi.ABI{}, err
+			}
 		}
 		a, err := abi.JSON(bytes.NewReader(data))
 		if err != nil {
