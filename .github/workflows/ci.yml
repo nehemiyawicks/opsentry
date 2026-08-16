@@ -9,6 +9,22 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: opsentry
+          POSTGRES_PASSWORD: opsentry
+          POSTGRES_DB: opsentry
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U opsentry -d opsentry"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      OPSENTRY_POSTGRES_TEST_URL: postgres://opsentry:opsentry@localhost:5432/opsentry?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -21,6 +37,8 @@ jobs:
         run: go build ./...
       - name: go test -race
         run: go test -race -timeout=5m ./...
+      - name: go test -tags integration
+        run: go test -tags integration -race -timeout=5m ./internal/storage/...
 
   lint:
     runs-on: ubuntu-latest
