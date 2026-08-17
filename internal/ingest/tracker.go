@@ -132,7 +132,6 @@ func (t *HeadTracker) pollConfirmationOnce(ctx context.Context, tag, kind string
 	if len(blocks) == 0 {
 		return
 	}
-	obs.HeadLag.WithLabelValues(t.Chain, kind).Set(0)
 	cb(ctx, blocks)
 }
 
@@ -205,7 +204,7 @@ func (t *HeadTracker) pollOnce(ctx context.Context) error {
 		if err := t.Store.SaveCursor(ctx, storage.Cursor{Chain: t.Chain, Block: newTip}); err != nil {
 			return fmt.Errorf("save cursor: %w", err)
 		}
-		obs.HeadLag.WithLabelValues(t.Chain, t.Tag).Set(float64(head.Number - newTip.Number))
+		obs.HeadLag.WithLabelValues(t.Chain, "fast").Set(float64(head.Number - newTip.Number))
 	}
 	return nil
 }

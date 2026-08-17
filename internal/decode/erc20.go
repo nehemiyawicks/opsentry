@@ -102,11 +102,11 @@ func (d *ABIDecoder) loadABI(ctx context.Context, spec MonitorSpec) (abi.ABI, er
 		if err != nil {
 			if d.Etherscan != nil && d.Etherscan.APIKey != "" {
 				d.logger().Info("sourcify miss, trying etherscan fallback", "monitor", spec.ID, "err", err)
-				if esData, esErr := d.Etherscan.FetchJSON(ctx, spec.ChainID, spec.Address); esErr == nil {
-					data = esData
-				} else {
-					return abi.ABI{}, fmt.Errorf("both sourcify and etherscan failed: sourcify=%v; etherscan=%v", err, esErr)
+				esData, esErr := d.Etherscan.FetchJSON(ctx, spec.ChainID, spec.Address)
+				if esErr != nil {
+					return abi.ABI{}, fmt.Errorf("etherscan fallback failed (sourcify: %v): %w", err, esErr)
 				}
+				data = esData
 			} else {
 				return abi.ABI{}, err
 			}

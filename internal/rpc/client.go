@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	"github.com/nehemiyawicks/opsentry/internal/obs"
 	"github.com/nehemiyawicks/opsentry/internal/pipeline"
 )
 
@@ -105,6 +106,7 @@ func tryFailover[T any](c *Client, fn func(*Endpoint) (T, error), what string) (
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return zero, err
 		}
+		obs.RPCErrors.WithLabelValues(c.chain, e.URL).Inc()
 		c.pool.markFailed(e)
 		lastErr = err
 	}
