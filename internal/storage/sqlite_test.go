@@ -60,6 +60,31 @@ func TestCursorRoundTrip(t *testing.T) {
 	}
 }
 
+func TestLoadCanonicalBlocksRange(t *testing.T) {
+	s := newTempStore(t)
+	ctx := context.Background()
+
+	for n := uint64(100); n <= 110; n++ {
+		if err := s.RememberBlock(ctx, mkBlock(n, byte(n), byte(n-1))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	blocks, err := s.LoadCanonicalBlocksRange(ctx, "base", 103, 106)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(blocks) != 4 || blocks[0].Number != 103 || blocks[3].Number != 106 {
+		t.Fatalf("expected [103..106], got %+v", blocks)
+	}
+	empty, err := s.LoadCanonicalBlocksRange(ctx, "base", 200, 300)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("expected empty range, got %d", len(empty))
+	}
+}
+
 func TestRememberAndLoadRecent(t *testing.T) {
 	s := newTempStore(t)
 	ctx := context.Background()

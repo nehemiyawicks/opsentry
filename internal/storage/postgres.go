@@ -166,6 +166,34 @@ func (s *PostgresStore) LoadRecentBlocks(ctx context.Context, chain string, minB
 	return out, rows.Err()
 }
 
+func (s *PostgresStore) LoadCanonicalBlocksRange(ctx context.Context, chain string, fromInclusive, toInclusive uint64) ([]pipeline.BlockRef, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT block_number, block_hash, parent_hash, block_time FROM blocks
+		 WHERE chain = $1 AND block_number BETWEEN $2 AND $3 ORDER BY block_number`,
+		chain, int64(fromInclusive), int64(toInclusive))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []pipeline.BlockRef
+	for rows.Next() {
+		var num int64
+		var hash, parent []byte
+		var t int64
+		if err := rows.Scan(&num, &hash, &parent, &t); err != nil {
+			return nil, err
+		}
+		out = append(out, pipeline.BlockRef{
+			Chain:      chain,
+			Number:     uint64(num),
+			Hash:       arr32(hash),
+			ParentHash: arr32(parent),
+			Time:       time.Unix(t, 0).UTC(),
+		})
+	}
+	return out, rows.Err()
+}
+
 func (s *PostgresStore) IsDuplicate(ctx context.Context, fingerprint string) (bool, error) {
 	row := s.pool.QueryRow(ctx, `SELECT 1 FROM alerts WHERE fingerprint = $1 LIMIT 1`, fingerprint)
 	var one int

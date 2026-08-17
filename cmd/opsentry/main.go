@@ -146,8 +146,15 @@ func main() {
 		}
 		chainLog := logger.With("chain", ch.ID)
 
-		addrs := monitorAddresses(cfg.Monitors, ch.ID)
-		chainLog.Info("aggregated monitor addresses", "count", len(addrs))
+		addrsByConf := monitorAddressesByConfirmation(cfg.Monitors, ch.ID)
+		totalAddrs := 0
+		for _, a := range addrsByConf {
+			totalAddrs += len(a)
+		}
+		chainLog.Info("aggregated monitor addresses", "count", totalAddrs,
+			"fast", len(addrsByConf["fast"]),
+			"safe", len(addrsByConf["safe"]),
+			"finalized", len(addrsByConf["finalized"]))
 
 		decoder := decode.NewDecoder()
 		decoder.Log = chainLog
@@ -172,56 +179,44 @@ func main() {
 		evalHolder.Store(initialEvaluator)
 		evaluators[ch.ID] = evalHolder
 
-		logFetcher := &ingest.LogFetcher{
-			Chain:     ch.ID,
-			Client:    client,
-			Addresses: addrs,
-			Log:       chainLog,
-			OnLog: func(ctx context.Context, l pipeline.Log) {
-				ev, err := decoder.Decode(ctx, l)
+		onLog := func(ctx context.Context, l pipeline.Log) {
+			ev, err := decoder.Decode(ctx, l)
+			if err != nil {
+				chainLog.Debug("decode", "err", err)
+				return
+			}
+			if r, ok := stateReaders[ev.MonitorID]; ok {
+				r.Enrich(ctx, &ev)
+			}
+			matches, err := evalHolder.Load().Eval(ctx, ev)
+			if err != nil {
+				chainLog.Warn("evaluate", "err", err)
+				return
+			}
+			for _, m := range matches {
+				alert, fired, err := alertMgr.Handle(ctx, m)
 				if err != nil {
-					chainLog.Debug("decode", "err", err)
-					return
+					chainLog.Warn("alert handle", "err", err)
+					continue
 				}
-				if r, ok := stateReaders[ev.MonitorID]; ok {
-					r.Enrich(ctx, &ev)
+				if !fired {
+					continue
 				}
-				matches, err := evalHolder.Load().Eval(ctx, ev)
-				if err != nil {
-					chainLog.Warn("evaluate", "err", err)
-					return
-				}
-				for _, m := range matches {
-					alert, fired, err := alertMgr.Handle(ctx, m)
-					if err != nil {
-						chainLog.Warn("alert handle", "err", err)
+				for _, rid := range m.Receivers {
+					if err := router.Send(ctx, rid, alert); err != nil {
+						chainLog.Warn("notify", "receiver", rid, "err", err)
 						continue
 					}
-					if !fired {
-						continue
-					}
-					for _, rid := range m.Receivers {
-						if err := router.Send(ctx, rid, alert); err != nil {
-							chainLog.Warn("notify", "receiver", rid, "err", err)
-							continue
-						}
-						obs.AlertsSent.WithLabelValues(rid, string(alert.Kind)).Inc()
-					}
+					obs.AlertsSent.WithLabelValues(rid, string(alert.Kind)).Inc()
 				}
-			},
+			}
 		}
 
+		fastFetcher := &ingest.LogFetcher{Chain: ch.ID, Client: client, Addresses: addrsByConf["fast"], Log: chainLog, OnLog: onLog}
+		safeFetcher := &ingest.LogFetcher{Chain: ch.ID, Client: client, Addresses: addrsByConf["safe"], Log: chainLog, OnLog: onLog}
+		finalizedFetcher := &ingest.LogFetcher{Chain: ch.ID, Client: client, Addresses: addrsByConf["finalized"], Log: chainLog, OnLog: onLog}
+
 		confirmDepth := uint64(ch.Confirmations.Fast)
-		for _, m := range cfg.Monitors {
-			if m.Chain != ch.ID {
-				continue
-			}
-			if m.Confirmation != "" && m.Confirmation != "fast" {
-				chainLog.Warn("monitor confirmation mode not yet supported, treating as fast",
-					"monitor", m.ID, "requested", m.Confirmation,
-					"note", "safe/finalized tag polling is a follow-up; chain.confirmations.fast applies to all monitors")
-			}
-		}
 		tracker := &ingest.HeadTracker{
 			Chain:        ch.ID,
 			Interval:     interval,
@@ -231,11 +226,21 @@ func main() {
 			Reconciler:   rec,
 			Store:        store,
 			Log:          chainLog,
+			SafeTag:      ch.Confirmations.Safe,
+			FinalizedTag: ch.Confirmations.Finalized,
 			OnCanonical: func(_ context.Context, b pipeline.BlockRef) {
 				chainLog.Info("canonical", "block", b.Number, "hash", fmt.Sprintf("%x", b.Hash[:6]))
 			},
 			OnCanonicalBatch: func(ctx context.Context, bs []pipeline.BlockRef) {
-				logFetcher.OnCanonicalBatch(ctx, bs)
+				fastFetcher.OnCanonicalBatch(ctx, bs)
+			},
+			OnCanonicalSafe: func(ctx context.Context, bs []pipeline.BlockRef) {
+				chainLog.Info("safe watermark advanced", "blocks", len(bs), "first", bs[0].Number, "last", bs[len(bs)-1].Number)
+				safeFetcher.OnCanonicalBatch(ctx, bs)
+			},
+			OnCanonicalFinalized: func(ctx context.Context, bs []pipeline.BlockRef) {
+				chainLog.Info("finalized watermark advanced", "blocks", len(bs), "first", bs[0].Number, "last", bs[len(bs)-1].Number)
+				finalizedFetcher.OnCanonicalBatch(ctx, bs)
 			},
 			OnReverted: func(ctx context.Context, b pipeline.BlockRef) {
 				chainLog.Warn("reverted", "block", b.Number, "hash", fmt.Sprintf("%x", b.Hash[:6]))
@@ -375,6 +380,32 @@ func monitorAddresses(monitors []config.Monitor, chain string) []common.Address 
 		}
 		seen[addr] = struct{}{}
 		out = append(out, addr)
+	}
+	return out
+}
+
+func monitorAddressesByConfirmation(monitors []config.Monitor, chain string) map[string][]common.Address {
+	out := map[string][]common.Address{"fast": nil, "safe": nil, "finalized": nil}
+	seen := map[string]map[common.Address]struct{}{
+		"fast": {}, "safe": {}, "finalized": {},
+	}
+	for _, m := range monitors {
+		if m.Chain != chain || m.Address == "" {
+			continue
+		}
+		conf := m.Confirmation
+		if conf == "" {
+			conf = "fast"
+		}
+		if _, ok := out[conf]; !ok {
+			conf = "fast"
+		}
+		addr := common.HexToAddress(m.Address)
+		if _, dup := seen[conf][addr]; dup {
+			continue
+		}
+		seen[conf][addr] = struct{}{}
+		out[conf] = append(out[conf], addr)
 	}
 	return out
 }

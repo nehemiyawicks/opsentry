@@ -31,8 +31,22 @@ type HeadTracker struct {
 	OnCanonicalBatch func(context.Context, []pipeline.BlockRef)
 	OnReverted       func(context.Context, pipeline.BlockRef)
 
+	SafeTag              string
+	FinalizedTag         string
+	SafeInterval         time.Duration
+	FinalizedInterval    time.Duration
+	OnCanonicalSafe      func(context.Context, []pipeline.BlockRef)
+	OnCanonicalFinalized func(context.Context, []pipeline.BlockRef)
+
 	mu      sync.Mutex
 	pending []pipeline.BlockRef
+
+	safeMu          sync.Mutex
+	safeTip         uint64
+	safeSeeded      bool
+	finalizedMu     sync.Mutex
+	finalizedTip    uint64
+	finalizedSeeded bool
 }
 
 func (t *HeadTracker) Run(ctx context.Context) error {
@@ -42,8 +56,20 @@ func (t *HeadTracker) Run(ctx context.Context) error {
 	if t.Interval == 0 {
 		t.Interval = 2 * time.Second
 	}
+	if t.SafeInterval == 0 {
+		t.SafeInterval = 30 * time.Second
+	}
+	if t.FinalizedInterval == 0 {
+		t.FinalizedInterval = 60 * time.Second
+	}
 	if err := t.seedFromStorage(ctx); err != nil {
 		t.logger().Warn("seed from storage", "chain", t.Chain, "err", err)
+	}
+	if t.SafeTag != "" && t.OnCanonicalSafe != nil {
+		go t.runConfirmationLoop(ctx, t.SafeTag, t.SafeInterval, "safe", &t.safeMu, &t.safeTip, &t.safeSeeded, t.OnCanonicalSafe)
+	}
+	if t.FinalizedTag != "" && t.OnCanonicalFinalized != nil {
+		go t.runConfirmationLoop(ctx, t.FinalizedTag, t.FinalizedInterval, "finalized", &t.finalizedMu, &t.finalizedTip, &t.finalizedSeeded, t.OnCanonicalFinalized)
 	}
 	ticker := time.NewTicker(t.Interval)
 	defer ticker.Stop()
@@ -60,6 +86,54 @@ func (t *HeadTracker) Run(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func (t *HeadTracker) runConfirmationLoop(ctx context.Context, tag string, interval time.Duration, kind string, mu *sync.Mutex, tip *uint64, seeded *bool, cb func(context.Context, []pipeline.BlockRef)) {
+	t.pollConfirmationOnce(ctx, tag, kind, mu, tip, seeded, cb)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			t.pollConfirmationOnce(ctx, tag, kind, mu, tip, seeded, cb)
+		}
+	}
+}
+
+func (t *HeadTracker) pollConfirmationOnce(ctx context.Context, tag, kind string, mu *sync.Mutex, tip *uint64, seeded *bool, cb func(context.Context, []pipeline.BlockRef)) {
+	head, err := t.Reader.HeadByTag(ctx, tag)
+	if err != nil {
+		t.logger().Warn("confirmation poll", "chain", t.Chain, "kind", kind, "tag", tag, "err", err)
+		return
+	}
+	mu.Lock()
+	if !*seeded {
+		*tip = head.Number
+		*seeded = true
+		mu.Unlock()
+		t.logger().Info("confirmation watermark seeded", "chain", t.Chain, "kind", kind, "block", head.Number)
+		return
+	}
+	prev := *tip
+	if head.Number <= prev {
+		mu.Unlock()
+		return
+	}
+	*tip = head.Number
+	mu.Unlock()
+
+	blocks, err := t.Store.LoadCanonicalBlocksRange(ctx, t.Chain, prev+1, head.Number)
+	if err != nil {
+		t.logger().Warn("confirmation range load", "chain", t.Chain, "kind", kind, "err", err)
+		return
+	}
+	if len(blocks) == 0 {
+		return
+	}
+	obs.HeadLag.WithLabelValues(t.Chain, kind).Set(0)
+	cb(ctx, blocks)
 }
 
 func (t *HeadTracker) logger() *slog.Logger {
