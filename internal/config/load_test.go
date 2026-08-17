@@ -27,3 +27,33 @@ func TestValidateRejectsUnknownReceiver(t *testing.T) {
 		t.Fatalf("expected error to name the unknown receiver, got: %v", err)
 	}
 }
+
+func TestValidateRejectsDuplicateMonitorID(t *testing.T) {
+	_, err := Load("testdata/duplicate_monitor.yaml")
+	if err == nil {
+		t.Fatal("expected validation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "duplicate monitor id") {
+		t.Fatalf("expected duplicate-monitor error, got: %v", err)
+	}
+}
+
+func TestValidateRejectsMalformedAddress(t *testing.T) {
+	_, err := Load("testdata/bad_address.yaml")
+	if err == nil {
+		t.Fatal("expected validation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "0x followed by 40 hex chars") {
+		t.Fatalf("expected address-format error, got: %v", err)
+	}
+}
+
+func TestValidateRejectsUnknownConfirmation(t *testing.T) {
+	_, err := Load("testdata/bad_confirmation.yaml")
+	if err == nil {
+		t.Fatal("expected validation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "fastt") {
+		t.Fatalf("expected confirmation-enum error mentioning fastt, got: %v", err)
+	}
+}
