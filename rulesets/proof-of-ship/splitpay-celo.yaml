@@ -1,0 +1,74 @@
+chains:
+  - id: celo
+    chain_id: 42220
+    rpcs:
+      - url: https://forno.celo.org
+        weight: 100
+    block_time_ms: 5000
+    confirmations:
+      fast: 3
+      safe: safe
+      finalized: finalized
+    reorg_check: hash_chain
+    recovery:
+      enabled: true
+      interval: 5m
+      max_blocks_per_run: 50
+      max_retries: 3
+
+receivers:
+  - id: info
+    type: log
+    url: ""
+    template:
+      title: "[INFO] splitpay — ${event.name}"
+      body: |
+        contract=${event.log.address}
+        group=${event.params.groupId}
+        block=${event.log.block.number}
+        tx=${event.log.tx_hash}
+  - id: expense
+    type: log
+    url: ""
+    template:
+      title: "[INFO] splitpay — expense added"
+      body: |
+        group=${event.params.groupId}
+        payer=${event.params.payer}
+        amount=${event.params.amount}
+        memo=${event.params.memo}
+        tx=${event.log.tx_hash}
+  - id: settle
+    type: log
+    url: ""
+    template:
+      title: "[INFO] splitpay — settled"
+      body: |
+        group=${event.params.groupId}
+        from=${event.params.from}
+        to=${event.params.to}
+        token=${event.params.token}
+        amount=${event.params.amount}
+        tx=${event.log.tx_hash}
+
+monitors:
+  - id: splitpay-celo-mainnet
+    chain: celo
+    address: "0x2979d1808024bd81eaba87942d79f7b2168e39c4"
+    abi: |
+      [
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"groupId","type":"bytes32"},{"indexed":true,"name":"creator","type":"address"},{"indexed":false,"name":"members","type":"address[]"}],"name":"GroupCreated","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"groupId","type":"bytes32"},{"indexed":true,"name":"payer","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"debtors","type":"address[]"},{"indexed":false,"name":"shares","type":"uint256[]"},{"indexed":false,"name":"memo","type":"string"},{"indexed":false,"name":"timestamp","type":"uint256"}],"name":"ExpenseAdded","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"groupId","type":"bytes32"},{"indexed":true,"name":"from","type":"address"},{"indexed":true,"name":"to","type":"address"},{"indexed":false,"name":"token","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"Settled","type":"event"}
+      ]
+    confirmation: fast
+    rules:
+      - when: 'event.name == "GroupCreated"'
+        severity: info
+        receivers: [info]
+      - when: 'event.name == "ExpenseAdded"'
+        severity: info
+        receivers: [expense]
+      - when: 'event.name == "Settled"'
+        severity: info
+        receivers: [settle]
