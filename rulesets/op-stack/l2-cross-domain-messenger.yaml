@@ -21,7 +21,7 @@ receivers:
     type: log
     url: ""
     template:
-      title: "[INFO] L2CrossDomainMessenger — ${event.name}"
+      title: "[INFO] L2CrossDomainMessenger: ${event.name}"
       body: |
         target=${event.params.target}
         sender=${event.params.sender}

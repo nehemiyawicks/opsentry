@@ -4,7 +4,7 @@ Monitors for the Uniswap V3 factory and pools. The mission spec called this pack
 
 ## Files
 
-### `factory-base.yaml` — Factory on Base
+### `factory-base.yaml`: Factory on Base
 
 Watches `UniswapV3Factory` at `0x33128a8fC17869897dcE68Ed026d694621f6FDfD` on Base. Fires on:
 

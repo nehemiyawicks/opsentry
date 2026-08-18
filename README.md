@@ -37,13 +37,13 @@ Live evidence: 10s of runtime against Base pulls ~10 canonical blocks and surfac
 make compose-up
 ```
 
-Runs opsentry + postgres + Prometheus from `deploy/docker-compose.yaml`. Prometheus is available at [http://localhost:9090](http://localhost:9090) and already scrapes opsentry's `/metrics` — search `opsentry_alerts_sent_total`, `opsentry_head_lag_blocks`, `opsentry_reorgs_seen_total`, etc.
+Runs opsentry + postgres + Prometheus from `deploy/docker-compose.yaml`. Prometheus is available at [http://localhost:9090](http://localhost:9090) and already scrapes opsentry's `/metrics`: search `opsentry_alerts_sent_total`, `opsentry_head_lag_blocks`, `opsentry_reorgs_seen_total`, etc.
 
 ## Reference rulesets
 
-- [`rulesets/op-stack/`](rulesets/op-stack/) — Portal, SystemConfig, L2ToL1MessagePasser
-- [`rulesets/uniswap-v3/`](rulesets/uniswap-v3/) — Factory PoolCreated
-- [`rulesets/aave-v3/`](rulesets/aave-v3/) — Pool LiquidationCall
+- [`rulesets/op-stack/`](rulesets/op-stack/): Portal, SystemConfig, L2ToL1MessagePasser
+- [`rulesets/uniswap-v3/`](rulesets/uniswap-v3/): Factory PoolCreated
+- [`rulesets/aave-v3/`](rulesets/aave-v3/): Pool LiquidationCall
 
 Each is a runnable standalone config. Copy the `monitors:` block into your own config to combine them.
 
@@ -66,9 +66,9 @@ Rule expressions run in `expr-lang/expr` (sandboxed, non-Turing-complete). Alert
 
 Early build. Mission milestones from [OP Governance Fund Mission Request #10293](https://gov.optimism.io/t/closed-governance-fund-mission-request-open-source-monitoring-alerting/10293):
 
-- **M1** (SDK triggers alerts on Slack/Telegram/PagerDuty for ERC-20 transfers) — **shipped**.
-- **M2** (ruleset framework + Uniswap V3 & Aave V3 reference rulesets) — **shipped**.
-- **M3** (fully-built SDK + accompanying UI) — SDK core done; UI in progress.
+- **M1** (SDK triggers alerts on Slack/Telegram/PagerDuty for ERC-20 transfers): **shipped**.
+- **M2** (ruleset framework + Uniswap V3 & Aave V3 reference rulesets): **shipped**.
+- **M3** (fully-built SDK + accompanying UI): SDK core done; UI in progress.
 
 ## Development
 

@@ -8,7 +8,7 @@ For OP Mainnet (chain id 10) or any other OP-Stack chain, swap the L1 addresses 
 
 ## Files
 
-### `base-portal-l1.yaml` — Base's OptimismPortal on L1
+### `base-portal-l1.yaml`: Base's OptimismPortal on L1
 
 Watches the OptimismPortal proxy for Base at `0x49048044D57e1C92A77f79988d21Fa8fAF74E97e` on Ethereum mainnet. Fires on:
 
@@ -16,19 +16,19 @@ Watches the OptimismPortal proxy for Base at `0x49048044D57e1C92A77f79988d21Fa8f
 - **`Unpaused`** → severity `critical`. The stop was released. Confirms who and when.
 - **`TransactionDeposited` + `state.paused == true`** → severity `critical`. **Invariant violation**: the contract should refuse deposits while paused, so this event firing with the pause bit set means either a contract bug or the check was somehow bypassed. Uses the new `reads` config to read `paused()` via `eth_call` at each block, then references it in the rule expression as `event.state.paused`.
 
-### `base-system-config-l1.yaml` — Base's SystemConfig on L1
+### `base-system-config-l1.yaml`: Base's SystemConfig on L1
 
 Watches the SystemConfig proxy for Base at `0x73a79Fab69143498Ed3712e519A88a918e1f4072` on Ethereum mainnet. Fires on:
 
 - **Any `ConfigUpdate`** → severity `critical`. Batcher key rotation, gas limit change, fee scalar change, unsafe block signer swap. These are always intentional protocol changes and always worth catching.
 
-### `l2-message-passer.yaml` — L2ToL1MessagePasser on L2
+### `l2-message-passer.yaml`: L2ToL1MessagePasser on L2
 
 Watches the `L2ToL1MessagePasser` predeploy at `0x4200000000000000000000000000000000000016` on L2. Fires on:
 
 - **`MessagePassed`** with `value > 100 ETH` → severity `high`. Large native-ETH withdrawal from the rollup. Not necessarily malicious but worth attention.
 
-### `base-l1-standard-bridge.yaml` — Base's L1StandardBridge on L1
+### `base-l1-standard-bridge.yaml`: Base's L1StandardBridge on L1
 
 Watches the `L1StandardBridge` for Base at `0x3154Cf16ccdb4C6d922629664174b904d80F2C35` on Ethereum mainnet. Fires on:
 
@@ -36,7 +36,7 @@ Watches the `L1StandardBridge` for Base at `0x3154Cf16ccdb4C6d922629664174b904d8
 
 Also decodes `ERC20DepositInitiated` (not thresholded by default; per-token thresholds would need per-monitor rules since token decimals differ). This mirrors the L2 side already covered by `l2-message-passer.yaml` (withdrawals) - together they give visibility into both directions of the bridge.
 
-### `l2-cross-domain-messenger.yaml` — L2CrossDomainMessenger on L2
+### `l2-cross-domain-messenger.yaml`: L2CrossDomainMessenger on L2
 
 Watches the `L2CrossDomainMessenger` predeploy at `0x4200000000000000000000000000000000000007` on L2. Decodes `SentMessage`, `RelayedMessage`, and `FailedRelayedMessage`. Fires on:
 

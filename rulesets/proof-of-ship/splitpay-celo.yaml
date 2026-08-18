@@ -21,7 +21,7 @@ receivers:
     type: log
     url: ""
     template:
-      title: "[INFO] splitpay — ${event.name}"
+      title: "[INFO] splitpay: ${event.name}"
       body: |
         contract=${event.log.address}
         group=${event.params.groupId}
@@ -31,7 +31,7 @@ receivers:
     type: log
     url: ""
     template:
-      title: "[INFO] splitpay — expense added"
+      title: "[INFO] splitpay: expense added"
       body: |
         group=${event.params.groupId}
         payer=${event.params.payer}
@@ -42,7 +42,7 @@ receivers:
     type: log
     url: ""
     template:
-      title: "[INFO] splitpay — settled"
+      title: "[INFO] splitpay: settled"
       body: |
         group=${event.params.groupId}
         from=${event.params.from}

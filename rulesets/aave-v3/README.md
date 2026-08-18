@@ -4,7 +4,7 @@ Monitors for the Aave V3 lending pool. The mission spec called this pack out by 
 
 ## Files
 
-### `pool-base.yaml` — Aave V3 Pool on Base
+### `pool-base.yaml`: Aave V3 Pool on Base
 
 Watches Aave V3's `Pool` proxy at `0xA238Dd80C259a72e81d7e4664a9801593F98d1c5` on Base. Fires on:
 

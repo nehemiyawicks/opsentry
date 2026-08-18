@@ -6,7 +6,7 @@ Anyone shipping a Proof of Ship app can send a PR adding their own contract here
 
 ## What's here
 
-- **`splitpay-celo.yaml`** — [splitpay](https://github.com/nehemiyawicks/splitpay), a Splitwise-style group expense splitter live at [`0x2979d1808024bd81eaba87942d79f7b2168e39c4`](https://celoscan.io/address/0x2979d1808024bd81eaba87942d79f7b2168e39c4) on Celo mainnet. Watches `GroupCreated`, `ExpenseAdded`, `Settled` and logs each.
+- **`splitpay-celo.yaml`**: [splitpay](https://github.com/nehemiyawicks/splitpay), a Splitwise-style group expense splitter live at [`0x2979d1808024bd81eaba87942d79f7b2168e39c4`](https://celoscan.io/address/0x2979d1808024bd81eaba87942d79f7b2168e39c4) on Celo mainnet. Watches `GroupCreated`, `ExpenseAdded`, `Settled` and logs each.
 
 ## Adding your app
 

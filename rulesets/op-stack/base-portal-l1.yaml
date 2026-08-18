@@ -21,7 +21,7 @@ receivers:
     type: log
     url: ""
     template:
-      title: "[CRITICAL] ${monitor.id} — ${event.name}"
+      title: "[CRITICAL] ${monitor.id}: ${event.name}"
       body: |
         Contract: ${event.log.address}
         Block:    ${event.log.block.number}
@@ -30,7 +30,7 @@ receivers:
     type: log
     url: ""
     template:
-      title: "[HIGH] ${monitor.id} — ${event.name}"
+      title: "[HIGH] ${monitor.id}: ${event.name}"
       body: |
         Large deposit detected.
         from=${event.params.from}
