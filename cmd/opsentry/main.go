@@ -367,23 +367,6 @@ func checkConfig(path string) error {
 	return nil
 }
 
-func monitorAddresses(monitors []config.Monitor, chain string) []common.Address {
-	seen := make(map[common.Address]struct{})
-	var out []common.Address
-	for _, m := range monitors {
-		if m.Chain != chain || m.Address == "" {
-			continue
-		}
-		addr := common.HexToAddress(m.Address)
-		if _, dup := seen[addr]; dup {
-			continue
-		}
-		seen[addr] = struct{}{}
-		out = append(out, addr)
-	}
-	return out
-}
-
 func monitorAddressesByConfirmation(monitors []config.Monitor, chain string) map[string][]common.Address {
 	out := map[string][]common.Address{"fast": nil, "safe": nil, "finalized": nil}
 	seen := map[string]map[common.Address]struct{}{
