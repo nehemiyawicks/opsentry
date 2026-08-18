@@ -1,0 +1,60 @@
+# Curve reentrancy-via-Vyper detector (July 2023, ~$70M across pools).
+# Historical template. Address below is the pETH/ETH pool, one of the
+# affected Vyper pools. To adapt for your pool, change `address` and
+# verify the pool uses a Vyper version at or above 0.3.1.
+#
+# See 2023-07-curve-vyper.md for the full postmortem and design rationale.
+
+chains:
+  - id: ethereum-mainnet
+    chain_id: 1
+    rpcs:
+      - url: https://eth.llamarpc.com
+        weight: 100
+    block_time_ms: 12000
+    confirmations:
+      fast: 1
+      safe: safe
+      finalized: finalized
+    reorg_check: hash_chain
+    recovery:
+      enabled: true
+      interval: 5m
+      max_blocks_per_run: 50
+      max_retries: 3
+
+receivers:
+  - id: withdrawal
+    type: log
+    url: ""
+    template:
+      title: "[HIGH] curve-vyper-pool RemoveLiquidity observed"
+      body: |
+        RemoveLiquidity on ${event.log.address}.
+        provider=${event.params.provider}
+        token_amounts=${event.params.token_amounts}
+        token_supply=${event.params.token_supply}
+        block=${event.log.block.number}
+        tx=${event.log.tx_hash}
+
+        If two RemoveLiquidity events with the same provider fire in
+        the same tx, that's a reentrancy signature. Route this receiver
+        to a channel where humans can eyeball same-tx correlation.
+
+monitors:
+  - id: curve-peth-eth-pool
+    chain: ethereum-mainnet
+    address: "0x9848482da3Ee3076165ce6497eDA906E66bB85C5"
+    abi: |
+      [
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"provider","type":"address"},{"indexed":false,"name":"token_amounts","type":"uint256[2]"},{"indexed":false,"name":"token_supply","type":"uint256"}],"name":"RemoveLiquidity","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"provider","type":"address"},{"indexed":false,"name":"token_amounts","type":"uint256[2]"},{"indexed":false,"name":"fees","type":"uint256[2]"},{"indexed":false,"name":"invariant","type":"uint256"},{"indexed":false,"name":"token_supply","type":"uint256"}],"name":"RemoveLiquidityImbalance","type":"event"}
+      ]
+    confirmation: fast
+    rules:
+      - when: 'event.name == "RemoveLiquidity"'
+        severity: high
+        receivers: [withdrawal]
+      - when: 'event.name == "RemoveLiquidityImbalance"'
+        severity: high
+        receivers: [withdrawal]

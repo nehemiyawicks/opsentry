@@ -1,0 +1,59 @@
+# Nomad Bridge signature-bypass detector (August 2022, ~$190M).
+# Historical template. The Replica address below is the original
+# Ethereum contract (now defunct). To adapt for your bridge, change
+# `address` and the event name, and route the alert to a receiver
+# that actually pages someone.
+#
+# See 2022-08-nomad.md for the full postmortem and design rationale.
+
+chains:
+  - id: ethereum-mainnet
+    chain_id: 1
+    rpcs:
+      - url: https://eth.llamarpc.com
+        weight: 100
+    block_time_ms: 12000
+    confirmations:
+      fast: 1
+      safe: safe
+      finalized: finalized
+    reorg_check: hash_chain
+    recovery:
+      enabled: true
+      interval: 5m
+      max_blocks_per_run: 50
+      max_retries: 3
+
+receivers:
+  - id: bridge-alert
+    type: log
+    url: ""
+    throttle:
+      min_interval: 1m
+    template:
+      title: "[CRITICAL] nomad-replica Process observed"
+      body: |
+        Bridge message processed on ${event.log.address}.
+        messageHash=${event.params.messageHash}
+        success=${event.params.success}
+        returnData=${event.params.returnData}
+        block=${event.log.block.number}
+        tx=${event.log.tx_hash}
+
+        In the Nomad attack, hundreds of these fired within a single
+        hour from unrelated senders. Rate-limit downstream: if you
+        see more than N Process events per hour, page.
+
+monitors:
+  - id: nomad-replica-eth
+    chain: ethereum-mainnet
+    address: "0x88A69B4E698A4B090DF6CF5Bd7B2D47325Ad30A3"
+    abi: |
+      [
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"messageHash","type":"bytes32"},{"indexed":true,"name":"success","type":"bool"},{"indexed":false,"name":"returnData","type":"bytes"}],"name":"Process","type":"event"}
+      ]
+    confirmation: fast
+    rules:
+      - when: 'event.name == "Process"'
+        severity: critical
+        receivers: [bridge-alert]

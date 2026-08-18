@@ -1,0 +1,76 @@
+# Euler Finance donation-attack detector (March 2023, ~$197M).
+# Historical template. The Euler pool address below is the original
+# contract (now defunct). To adapt for your lending pool, change
+# `address`, the ABI events, and if needed the receivers.
+#
+# See 2023-03-euler.md for the full postmortem and design rationale.
+
+chains:
+  - id: ethereum-mainnet
+    chain_id: 1
+    rpcs:
+      - url: https://eth.llamarpc.com
+        weight: 100
+    block_time_ms: 12000
+    confirmations:
+      fast: 3
+      safe: safe
+      finalized: finalized
+    reorg_check: hash_chain
+    recovery:
+      enabled: true
+      interval: 5m
+      max_blocks_per_run: 50
+      max_retries: 3
+
+receivers:
+  - id: donation
+    type: log
+    url: ""
+    template:
+      title: "[HIGH] euler-donatereserve donation observed"
+      body: |
+        Reserve donation on ${event.log.address}.
+        account=${event.params.account}
+        amount=${event.params.amount}
+        block=${event.log.block.number}
+        tx=${event.log.tx_hash}
+
+        This event is rare in normal operation. Correlate with any
+        Liquidation on the same account within the same tx or block.
+  - id: liquidation
+    type: log
+    url: ""
+    template:
+      title: "[HIGH] euler-liquidateliquidation observed"
+      body: |
+        Liquidation on ${event.log.address}.
+        liquidator=${event.params.liquidator}
+        violator=${event.params.violator}
+        underlying=${event.params.underlying}
+        collateral=${event.params.collateral}
+        repay=${event.params.repay}
+        yield=${event.params._yield}
+        block=${event.log.block.number}
+        tx=${event.log.tx_hash}
+
+        Correlate with any RequestGovSetReserveFee / RepayReserves on
+        the same violator within this or the previous block.
+
+monitors:
+  - id: euler-main-pool
+    chain: ethereum-mainnet
+    address: "0x27182842E098f60e3D576794A5bFFb0777E025d3"
+    abi: |
+      [
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"account","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"RepayReserves","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"liquidator","type":"address"},{"indexed":true,"name":"violator","type":"address"},{"indexed":true,"name":"underlying","type":"address"},{"indexed":false,"name":"collateral","type":"address"},{"indexed":false,"name":"repay","type":"uint256"},{"indexed":false,"name":"_yield","type":"uint256"}],"name":"Liquidation","type":"event"}
+      ]
+    confirmation: fast
+    rules:
+      - when: 'event.name == "RepayReserves"'
+        severity: high
+        receivers: [donation]
+      - when: 'event.name == "Liquidation"'
+        severity: high
+        receivers: [liquidation]

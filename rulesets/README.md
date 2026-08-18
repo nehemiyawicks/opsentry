@@ -13,6 +13,7 @@ For your real deployment, take the `monitors:` blocks you want, drop them into y
 - **`aave-v3/`** — Aave V3 lending pool.
 - **`tokens/`** — High-volume ERC-20 large-transfer alerts (USDC, WETH on Base). Copy-adapt for any ERC-20.
 - **`proof-of-ship/`** — Live production apps built for [Celo Proof of Ship](https://www.celopg.eco/programs/proof-of-ship-s1) and similar builder programs. Proves opsentry works against consumer-app deployments on non-OP-Stack chains. Open to PRs from other Proof of Ship builders.
+- **`postmortem/`** — Rulesets that would have caught known past hacks. Each entry pairs a short postmortem writeup with a runnable ruleset template. Meant as an educational corpus and a starting point for teams wiring detection for the same class of attack. Open to PRs.
 
 ## Verifying addresses
 
